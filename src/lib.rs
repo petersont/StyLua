@@ -451,11 +451,15 @@ pub fn format_ast(
     Ok(ast)
 }
 
+use full_moon::ast::punctuated::Punctuated;
+use full_moon::ast::punctuated::Pair;
+use full_moon::ast::Expression;
+
 fn foo_expression(expression: full_moon::ast::Expression) -> full_moon::ast::Expression
 {
     match expression
     {
-        full_moon::ast::Expression::BinaryOperator{lhs, binop, rhs:_} =>
+        full_moon::ast::Expression::BinaryOperator{ref lhs, ref binop, rhs:_} =>
         {
             match binop
             {
@@ -496,12 +500,32 @@ fn foo_expression(expression: full_moon::ast::Expression) -> full_moon::ast::Exp
     expression
 }
 
+fn replace_expressions(
+    punctuated_expressions: Punctuated<Expression>,
+    expressions: Vec<Expression>) -> Punctuated<Expression>
+{
+    let mut new_expressions = Punctuated::new();
+
+    for (pair, expression) in punctuated_expressions.pairs().zip(expressions)
+    {
+        match pair.punctuation()
+        {
+            Some(punctuation) =>
+                new_expressions.push_punctuated(expression, punctuation.clone()),
+
+            None =>
+                new_expressions.push(Pair::End(expression)),
+        }
+    }
+
+    new_expressions
+}
+
 fn foo_local_assignment(local_assignment: full_moon::ast::LocalAssignment) -> full_moon::ast::LocalAssignment
 {
-    local_assignment.clone().with_expressions(local_assignment.expressions().iter().map(
-        |expression|
-            foo_expression(expression.clone())
-        ).collect())
+    local_assignment.clone().with_expressions(replace_expressions(local_assignment.expressions().clone(),
+        local_assignment.expressions().iter().map(
+        |expression| foo_expression(expression.clone())).collect()))
 }
 
 fn foo_statement(statement: full_moon::ast::Stmt) -> full_moon::ast::Stmt
