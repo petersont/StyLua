@@ -2,27 +2,82 @@ use full_moon::ast::Ast;
 use full_moon::ast::punctuated::Punctuated;
 use full_moon::ast::punctuated::Pair;
 use full_moon::ast::Expression;
+use full_moon::ast::BinOp::Or;
+use full_moon::ast::BinOp::And;
+use full_moon::ast::UnOp::Not;
+use full_moon::tokenizer::TokenReference;
+use full_moon::ast::Expression::FunctionCall;
+use full_moon::tokenizer::Token;
+use full_moon::tokenizer::Symbol::True;
+use full_moon::tokenizer::Symbol::False;
+use full_moon::tokenizer::TokenType::Symbol;
 
-fn foo_expression(expression: full_moon::ast::Expression) -> full_moon::ast::Expression
+fn simplify_expression(expression: full_moon::ast::Expression) -> full_moon::ast::Expression
 {
     match expression
     {
-        full_moon::ast::Expression::FunctionCall(function_call) =>
+        FunctionCall(function_call) =>
         {
-            return full_moon::ast::Expression::FunctionCall(function_call);
+            return FunctionCall(function_call);
         }
         full_moon::ast::Expression::Parentheses{ref contained, ref expression} =>
         {
             return Expression::Parentheses{
                 contained: contained.clone(),
-                expression: Box::new(foo_expression(*expression.clone())),
+                expression: Box::new(simplify_expression(*expression.clone())),
             };
+        },
+        full_moon::ast::Expression::UnaryOperator{ref unop, ref expression} =>
+        {
+            match unop
+            {
+                Not(_) =>
+                {
+                    let expression_clone = simplify_expression(*expression.clone());
+                    match expression_clone
+                    {
+                        full_moon::ast::Expression::Symbol(token_reference) =>
+                        {
+                            let leading_trivia = token_reference.leading_trivia().map(|x| x.clone()).collect();
+                            let trailing_trivia = token_reference.trailing_trivia().map(|x| x.clone()).collect();
+
+                            match token_reference.token().token_type()
+                            {
+                                full_moon::tokenizer::TokenType::Symbol{ symbol } =>
+                                {
+                                    match symbol
+                                    {
+                                        True =>
+                                            return full_moon::ast::Expression::Symbol(TokenReference::new(
+                                                leading_trivia,
+                                                Token::new(Symbol{symbol:False}),
+                                                trailing_trivia,
+                                            )),
+
+                                        False =>
+                                            return full_moon::ast::Expression::Symbol(TokenReference::new(
+                                                leading_trivia,
+                                                Token::new(Symbol{symbol:True}),
+                                                trailing_trivia,
+                                            )),
+
+                                        _ => {},
+                                    }
+                                },
+                                _ => {},
+                            }
+                        },
+                        _ => {},
+                    }
+                }
+                _ => {},
+            }
         },
         full_moon::ast::Expression::BinaryOperator{ref lhs, ref binop, ref rhs} =>
         {
             match binop
             {
-                full_moon::ast::BinOp::Or(_) =>
+                Or(_) =>
                 {
                     let lhs_clone = *lhs.clone();
                     match lhs_clone
@@ -35,10 +90,10 @@ fn foo_expression(expression: full_moon::ast::Expression) -> full_moon::ast::Exp
                                 {
                                     match symbol
                                     {
-                                        full_moon::tokenizer::Symbol::True =>
+                                        True =>
                                             return Expression::Symbol(token_reference),
 
-                                        full_moon::tokenizer::Symbol::False =>
+                                        False =>
                                             return *rhs.clone(),
 
                                         _ => {},
@@ -62,10 +117,10 @@ fn foo_expression(expression: full_moon::ast::Expression) -> full_moon::ast::Exp
                                 {
                                     match symbol
                                     {
-                                        full_moon::tokenizer::Symbol::True =>
+                                        True =>
                                             return Expression::Symbol(token_reference),
 
-                                        full_moon::tokenizer::Symbol::False =>
+                                        False =>
                                             return *lhs.clone(),
                                         _ => {},
                                     }
@@ -78,7 +133,7 @@ fn foo_expression(expression: full_moon::ast::Expression) -> full_moon::ast::Exp
                     }
                 },
 
-                full_moon::ast::BinOp::And(_) =>
+                And(_) =>
                 {
                     let lhs_clone = *lhs.clone();
                     match lhs_clone
@@ -91,10 +146,10 @@ fn foo_expression(expression: full_moon::ast::Expression) -> full_moon::ast::Exp
                                 {
                                     match symbol
                                     {
-                                        full_moon::tokenizer::Symbol::False =>
+                                        False =>
                                             return Expression::Symbol(token_reference),
 
-                                        full_moon::tokenizer::Symbol::True =>
+                                        True =>
                                             return *rhs.clone(),
                                         _ => {},
                                     }
@@ -117,10 +172,10 @@ fn foo_expression(expression: full_moon::ast::Expression) -> full_moon::ast::Exp
                                 {
                                     match symbol
                                     {
-                                        full_moon::tokenizer::Symbol::False =>
+                                        False =>
                                             return Expression::Symbol(token_reference),
 
-                                        full_moon::tokenizer::Symbol::True =>
+                                        True =>
                                             return *lhs.clone(),
                                         _ => {},
                                     }
@@ -137,9 +192,9 @@ fn foo_expression(expression: full_moon::ast::Expression) -> full_moon::ast::Exp
             }
 
             return Expression::BinaryOperator{
-                lhs: Box::new(foo_expression(*lhs.clone())),
+                lhs: Box::new(simplify_expression(*lhs.clone())),
                 binop: binop.clone(),
-                rhs: Box::new(foo_expression(*rhs.clone())),
+                rhs: Box::new(simplify_expression(*rhs.clone())),
             };
         },
         _ => {},
@@ -173,7 +228,7 @@ fn foo_local_assignment(local_assignment: full_moon::ast::LocalAssignment) -> fu
 {
     local_assignment.clone().with_expressions(replace_expressions(local_assignment.expressions().clone(),
         local_assignment.expressions().iter().map(
-        |expression| foo_expression(expression.clone())).collect()))
+        |expression| simplify_expression(expression.clone())).collect()))
 }
 
 fn foo_statement(statement: full_moon::ast::Stmt) -> full_moon::ast::Stmt
@@ -232,7 +287,7 @@ fn basic_assignment() {
 }
 
     #[test]
-    fn test_format_code_basic() {
+    fn basic() {
         input_output( "\
 local function f()
     return false;
@@ -249,93 +304,114 @@ return jeff
     }
 
     #[test]
-    fn test_format_code_with_bool_or_lhs() {
+    fn bool_or_lhs() {
         input_output(
             "local x = true or y\n",
             "local x = true\n");
     }
 
     #[test]
-    fn test_format_code_with_bool_or_rhs() {
+    fn bool_or_rhs() {
         input_output(
             "local x = y or true\n",
             "local x = true\n");
     }
 
     #[test]
-    fn test_format_code_with_bool_and_lhs() {
+    fn bool_and_lhs() {
         input_output(
             "local x = false and z\n",
             "local x = false\n");
     }
 
     #[test]
-    fn test_format_code_with_bool_and_rhs() {
+    fn bool_and_rhs() {
         input_output(
             "local x = y and false\n",
             "local x = false\n");
     }
 
     #[test]
-    fn test_format_code_with_bool_or_identity_lhs() {
+    fn bool_or_identity_lhs() {
         input_output(
             "local x = false or y\n",
             "local x = y\n");
     }
 
     #[test]
-    fn test_format_code_with_bool_or_identity_rhs() {
+    fn bool_or_identity_rhs() {
         input_output(
             "local x = y or false\n",
             "local x = y\n");
     }
 
     #[test]
-    fn test_format_code_with_bool_and_identity_lhs() {
+    fn bool_and_identity_lhs() {
         input_output(
             "local x = true and y\n",
             "local x = y\n");
     }
 
     #[test]
-    fn test_format_code_with_bool_and_identity_rhs() {
+    fn bool_and_identity_rhs() {
         input_output(
             "local x = y and true\n",
             "local x = y\n");
     }
 
     #[test]
-    fn test_format_code_with_bools_true() {
+    fn bools_true() {
         input_output(
             "local x = true or b and c\n",
             "local x = true\n");
     }
 
     #[test]
-    fn test_format_code_with_bools_or_subexpression() {
+    fn bools_or_subexpression() {
         input_output(
             "local x = a or b and false\n",
             "local x = a or false\n");
     }
 
     #[test]
-    fn test_format_code_with_expression_parentheses() {
+    fn bool_literal_in_parentheses() {
         input_output(
             "local x = (true)\n",
             "local x = true\n");
     }
 
     #[test]
-    fn test_format_code_with_expression_in_parentheses() {
+    fn or_expression_in_parentheses() {
         input_output(
             "local x = (true or y)\n",
             "local x = true\n");
     }
 
     #[test]
-    fn test_format_code_with_expression_in_argument_of_function() {
+    fn and_expression_in_parentheses() {
+        input_output(
+            "local x = (false and y)\n",
+            "local x = false\n");
+    }
+
+    #[test]
+    fn not_true() {
+        input_output(
+            "local x = not true\n",
+            "local x = false\n");
+    }
+
+    #[test]
+    fn not_false() {
+        input_output(
+            "local x = not false\n",
+            "local x = true\n");
+    }
+
+    #[test]
+    fn expression_in_argument_of_function() {
         input_output(
             "local x = foo(true or y)\n",
-            "local x = true\n");
+            "local x = foo(true)\n");
     }
 }
