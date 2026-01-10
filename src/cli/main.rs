@@ -42,7 +42,7 @@ enum FormatResult {
 #[derive(Error, Debug)]
 #[error("{:#}", .error)]
 struct ErrorFileWrapper {
-    file: String,
+    _file: String,
     error: anyhow::Error,
 }
 
@@ -339,7 +339,7 @@ fn format(opt: opt::Opt) -> Result<i32> {
                 },
                 Err(err) if matches!(output_format, opt::OutputFormat::Json) => {
                     match err.downcast_ref::<ErrorFileWrapper>() {
-                        Some(ErrorFileWrapper { file, error }) => {
+                        Some(ErrorFileWrapper { _file : file, error }) => {
                             match error.downcast_ref::<stylua_lib::Error>() {
                                 Some(stylua_lib::Error::ParseError(err)) => {
                                     let structured_err =
@@ -409,7 +409,7 @@ fn format(opt: opt::Opt) -> Result<i32> {
                                 })
                                 .map_err(|error| {
                                     ErrorFileWrapper {
-                                        file: "stdin".to_string(),
+                                        _file: "stdin".to_string(),
                                         error,
                                     }
                                     .into()
@@ -461,7 +461,7 @@ fn format(opt: opt::Opt) -> Result<i32> {
                                 format_file(&path, config, range, &opt, verify_output).map_err(
                                     |error| {
                                         ErrorFileWrapper {
-                                            file: path.display().to_string(),
+                                            _file: path.display().to_string(),
                                             error,
                                         }
                                         .into()

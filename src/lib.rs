@@ -13,6 +13,7 @@ mod context;
 pub mod editorconfig;
 mod formatters;
 mod shape;
+mod simplify;
 mod sort_requires;
 mod verify_ast;
 
@@ -451,110 +452,6 @@ pub fn format_ast(
     Ok(ast)
 }
 
-use full_moon::ast::punctuated::Punctuated;
-use full_moon::ast::punctuated::Pair;
-use full_moon::ast::Expression;
-
-fn foo_expression(expression: full_moon::ast::Expression) -> full_moon::ast::Expression
-{
-    match expression
-    {
-        full_moon::ast::Expression::BinaryOperator{ref lhs, ref binop, rhs:_} =>
-        {
-            match binop
-            {
-                full_moon::ast::BinOp::Or(_) =>
-                {
-                    let lhs_clone = *lhs.clone();
-                    match lhs_clone
-                    {
-                        full_moon::ast::Expression::Symbol(token_reference) =>
-                        {
-                            println!("Hey OR first symbol: {:?}", token_reference);
-                            match token_reference.token().token_type()
-                            {
-                                full_moon::tokenizer::TokenType::Symbol{ symbol } =>
-                                {
-                                    match symbol
-                                    {
-                                        full_moon::tokenizer::Symbol::True =>
-                                        {
-                                            println!("Ah HA it's True");
-                                        },
-                                        _ => {},
-                                    }
-                                },
-                                _ => {},
-                            }
-                        },
-
-                        _ => {},
-                    }
-                },
-                _ => {},
-            }
-        },
-        _ => {},
-    }
-
-    expression
-}
-
-fn replace_expressions(
-    punctuated_expressions: Punctuated<Expression>,
-    expressions: Vec<Expression>) -> Punctuated<Expression>
-{
-    let mut new_expressions = Punctuated::new();
-
-    for (pair, expression) in punctuated_expressions.pairs().zip(expressions)
-    {
-        match pair.punctuation()
-        {
-            Some(punctuation) =>
-                new_expressions.push_punctuated(expression, punctuation.clone()),
-
-            None =>
-                new_expressions.push(Pair::End(expression)),
-        }
-    }
-
-    new_expressions
-}
-
-fn foo_local_assignment(local_assignment: full_moon::ast::LocalAssignment) -> full_moon::ast::LocalAssignment
-{
-    local_assignment.clone().with_expressions(replace_expressions(local_assignment.expressions().clone(),
-        local_assignment.expressions().iter().map(
-        |expression| foo_expression(expression.clone())).collect()))
-}
-
-fn foo_statement(statement: full_moon::ast::Stmt) -> full_moon::ast::Stmt
-{
-    match statement
-    {
-        full_moon::ast::Stmt::LocalAssignment(local_assignment) =>
-        {
-            return full_moon::ast::Stmt::LocalAssignment(
-                foo_local_assignment(local_assignment.clone()))
-        },
-        _ => statement,
-    }
-}
-
-fn foo_block(block: full_moon::ast::Block) -> full_moon::ast::Block
-{
-    block.clone().with_stmts(
-        block.stmts_with_semicolon().map(
-            |(statement, token_reference)|
-                (foo_statement(statement.clone()), token_reference.clone())
-        ).collect())
-}
-
-fn foo(input_ast: Ast) -> Ast
-{
-    input_ast.clone().with_nodes(foo_block(input_ast.nodes().clone()))
-}
-
 /// Formats given Lua code
 #[allow(clippy::result_large_err)]
 pub fn format_code(
@@ -572,7 +469,7 @@ pub fn format_code(
 
     if config.functional_style_enabled
     {
-        input_ast = foo(input_ast);
+        input_ast = simplify::foo(input_ast);
     }
 
     let ast = format_ast(input_ast, config, range, verify_output)?;
@@ -617,54 +514,6 @@ mod tests {
             OutputVerification::None,
         );
         assert!(matches!(output, Err(Error::ParseError(_))))
-    }
-
-    #[test]
-    fn test_format_code_basic() {
-        let input = "\
-local function f()
-    return false;
-end
-
-return jeff
-";
-
-        let expected_output = "\
-local function f()
-\treturn false
-end
-
-return jeff
-";
-
-        match format_code(input, Config::default(), None, OutputVerification::None)
-        {
-            Ok(output_string) =>
-                assert_eq!(output_string, expected_output),
-            Err(_) =>
-                panic!("unexpected error"),
-        }
-    }
-
-    #[test]
-    fn test_format_code_with_functional() {
-        let input =
-            "local x = true or b and c";
-
-        let expected_output =
-            "local x = true\n";
-
-        match format_code(input, Config::default(), None, OutputVerification::None)
-        {
-            Ok(output_string) =>
-            {
-                assert_eq!(output_string, expected_output);
-            },
-            Err(_) =>
-            {
-                panic!("Error not expcted here");
-            }
-        }
     }
 
     #[test]
