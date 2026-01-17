@@ -330,9 +330,13 @@ fn simplify_punctuated_expressions(punctuated_expressions :&Punctuated<Expressio
         |expression| simplify_expression(expression.clone())).collect())
 }
 
-fn simplify_local_assignment(local_assignment: &LocalAssignment) -> full_moon::ast::LocalAssignment
+fn simplify_local_assignment(local_assignment: &LocalAssignment) -> Vec<Stmt>
 {
-    local_assignment.clone().with_expressions(simplify_punctuated_expressions(local_assignment.expressions()))
+    vec![
+        Stmt::LocalAssignment(
+            local_assignment.clone().with_expressions(
+                simplify_punctuated_expressions(local_assignment.expressions())
+    ))]
 }
 
 fn is_just_true(new_condition: &Expression) -> bool
@@ -358,14 +362,14 @@ fn is_just_true(new_condition: &Expression) -> bool
     }
 }
 
-fn simplify_if_statement(if_statement: &If) -> Stmt
+fn simplify_if_statement(if_statement: &If) -> Vec<Stmt>
 {
     let new_condition = simplify_expression(if_statement.condition().clone());
     let new_block = simplify_block(if_statement.block());
 
     if is_just_true(&new_condition)
     {
-        return Stmt::Do(Do::new().with_block(new_block))
+        return vec![Stmt::Do(Do::new().with_block(new_block))];
     }
 
     let mut new_if_statement = If::new(new_condition).with_block(new_block);
@@ -380,9 +384,9 @@ fn simplify_if_statement(if_statement: &If) -> Stmt
 
             if is_just_true(&new_clause_condition)
             {
-                return Stmt::If(new_if_statement
+                return vec![Stmt::If(new_if_statement
                     .with_else_token(Some(TokenReference::symbol("else").unwrap()))
-                    .with_else(Some(new_clause_block)));
+                    .with_else(Some(new_clause_block)))];
             }
             new_elseifs.push(else_if_clause.clone())
         }
@@ -396,34 +400,39 @@ fn simplify_if_statement(if_statement: &If) -> Stmt
             .with_else(Some(simplify_block(else_block)));
     }
 
-    Stmt::If(new_if_statement)
+    vec![Stmt::If(new_if_statement)]
 }
 
-fn simplify_statement(statement: &Stmt) -> Stmt
+fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
 {
     match statement
     {
-        full_moon::ast::Stmt::LocalAssignment(local_assignment) =>
-        {
-            return full_moon::ast::Stmt::LocalAssignment(
-                simplify_local_assignment(&local_assignment))
-        },
+        Stmt::LocalAssignment(local_assignment) =>
+            simplify_local_assignment(&local_assignment),
 
-        full_moon::ast::Stmt::If(if_statement) =>
-        {
-            return simplify_if_statement(&if_statement)
-        },
-        _ => statement.clone(),
+        Stmt::If(if_statement) =>
+            simplify_if_statement(&if_statement),
+        
+        _ => vec![statement.clone()],
     }
 }
 
 fn simplify_block(block: &Block) -> Block
 {
-    block.clone().with_stmts(
-        block.stmts_with_semicolon().map(
-            |(statement, token_reference)|
-                (simplify_statement(statement), token_reference.clone())
-        ).collect())
+    let mut new_stmts = vec![];
+
+    for (statement, token_reference) in block.stmts_with_semicolon()
+    {
+        for new_statement in simplify_statement(&statement)
+        {
+            new_stmts.push((
+                new_statement,
+                token_reference.clone()
+            ));
+        }
+    }
+
+    block.clone().with_stmts(new_stmts)
 }
 
 pub fn simplify_ast(input_ast: Ast) -> Ast
@@ -698,7 +707,8 @@ elseif true then
 \tbar1()
 elseif third then
 \tbar2()
-end\n", "\
+end\n",
+"\
 if first then
 \tfoo()
 else
