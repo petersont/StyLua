@@ -309,7 +309,7 @@ impl Default for Config {
             sort_requires: SortRequiresConfig::default(),
             space_after_function_names: SpaceAfterFunctionNames::default(),
             block_newline_gaps: BlockNewlineGaps::default(),
-            functional_style_enabled: true,
+            functional_style_enabled: false,
         }
     }
 }

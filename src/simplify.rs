@@ -305,7 +305,7 @@ fn simplify_punctuated_expressions(punctuated_expressions :&Punctuated<Expressio
 
 fn simplify_local_assignment(local_assignment: full_moon::ast::LocalAssignment) -> full_moon::ast::LocalAssignment
 {
-    local_assignment.clone().with_expressions(local_assignment.expressions().clone())
+    local_assignment.clone().with_expressions(simplify_punctuated_expressions(local_assignment.expressions()))
 }
 
 fn simplify_statement(statement: full_moon::ast::Stmt) -> full_moon::ast::Stmt
