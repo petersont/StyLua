@@ -1,42 +1,112 @@
 use full_moon::ast::Ast;
 use full_moon::ast::punctuated::Punctuated;
 use full_moon::ast::punctuated::Pair;
-use full_moon::ast::Expression;
 use full_moon::ast::BinOp::Or;
 use full_moon::ast::BinOp::And;
 use full_moon::ast::UnOp::Not;
+use full_moon::ast::FunctionCall;
+
+use full_moon::ast::Expression;
+use full_moon::ast::Expression::UnaryOperator;
+use full_moon::ast::Suffix;
+use full_moon::ast::Call;
+use full_moon::ast::FunctionArgs;
+
 use full_moon::tokenizer::TokenReference;
-use full_moon::ast::Expression::FunctionCall;
 use full_moon::tokenizer::Token;
 use full_moon::tokenizer::Symbol::True;
 use full_moon::tokenizer::Symbol::False;
 use full_moon::tokenizer::TokenType::Symbol;
 
+fn simplify_function_args(function_args: &FunctionArgs) -> FunctionArgs
+{
+    match function_args
+    {
+        FunctionArgs::Parentheses {parentheses, arguments} => FunctionArgs::Parentheses {
+            parentheses: parentheses.clone(),
+            arguments: simplify_punctuated_expressions(arguments),
+        },
+
+        FunctionArgs::String(token_reference) => FunctionArgs::String(token_reference.clone()),
+        FunctionArgs::TableConstructor(table_constructor) => FunctionArgs::TableConstructor(table_constructor.clone()),
+        &_ => todo!(),
+    }
+}
+
+fn simplify_call(call: &Call) -> Call
+{
+    match call
+    {
+        Call::AnonymousCall(function_args) => Call::AnonymousCall(simplify_function_args(function_args)),
+        Call::MethodCall(method_call) => Call::MethodCall(method_call.clone()),
+        &_ => todo!(),
+    }
+}
+
+fn simplify_suffix(suffix: &Suffix) -> Suffix
+{
+    match suffix
+    {
+        Suffix::Call(call) =>
+        {
+            Suffix::Call(simplify_call(call))
+        },
+
+        Suffix::Index(index) =>
+        {
+            Suffix::Index(index.clone())
+        },
+
+        #[cfg(feature = "luau")]
+        Suffix::TypeInstantiation(type_instantiation) =>
+        {
+            Suffix::TypeInstantiation(type_instantiation.clone())
+        },
+
+        &_ => todo!()
+    }
+}
+
+fn simplify_function_call(function_call: FunctionCall) -> FunctionCall
+{
+    let suffixes = function_call.suffixes().map(|suffix| simplify_suffix(suffix)).collect();
+    function_call.with_suffixes(suffixes)
+}
+
 fn simplify_expression(expression: full_moon::ast::Expression) -> full_moon::ast::Expression
 {
     match expression
     {
-        FunctionCall(function_call) =>
-        {
-            return FunctionCall(function_call);
-        }
+        Expression::FunctionCall(function_call) =>
+            return Expression::FunctionCall(simplify_function_call(function_call)),
+
         full_moon::ast::Expression::Parentheses{ref contained, ref expression} =>
         {
+            let new_inside_expression = simplify_expression(*expression.clone());
+            match new_inside_expression
+            {
+                Expression::Symbol(ref _symbol) =>
+                {
+                    return new_inside_expression;
+                },
+                _ => {},
+            }
+
             return Expression::Parentheses{
                 contained: contained.clone(),
-                expression: Box::new(simplify_expression(*expression.clone())),
+                expression: Box::new(new_inside_expression),
             };
         },
-        full_moon::ast::Expression::UnaryOperator{ref unop, ref expression} =>
+        UnaryOperator{ref unop, ref expression} =>
         {
             match unop
             {
                 Not(_) =>
                 {
-                    let expression_clone = simplify_expression(*expression.clone());
-                    match expression_clone
+                    let new_expression = simplify_expression(*expression.clone());
+                    match new_expression
                     {
-                        full_moon::ast::Expression::Symbol(token_reference) =>
+                        full_moon::ast::Expression::Symbol(ref token_reference) =>
                         {
                             let leading_trivia = token_reference.leading_trivia().map(|x| x.clone()).collect();
                             let trailing_trivia = token_reference.trailing_trivia().map(|x| x.clone()).collect();
@@ -69,6 +139,8 @@ fn simplify_expression(expression: full_moon::ast::Expression) -> full_moon::ast
                         },
                         _ => {},
                     }
+
+                    return UnaryOperator{unop: unop.clone(), expression: Box::new(new_expression.clone())};
                 }
                 _ => {},
             }
@@ -224,53 +296,57 @@ fn replace_expressions(
     new_expressions
 }
 
-fn foo_local_assignment(local_assignment: full_moon::ast::LocalAssignment) -> full_moon::ast::LocalAssignment
+fn simplify_punctuated_expressions(punctuated_expressions :&Punctuated<Expression>) -> Punctuated<Expression>
 {
-    local_assignment.clone().with_expressions(replace_expressions(local_assignment.expressions().clone(),
-        local_assignment.expressions().iter().map(
-        |expression| simplify_expression(expression.clone())).collect()))
+    replace_expressions(punctuated_expressions.clone(),
+        punctuated_expressions.iter().map(
+        |expression| simplify_expression(expression.clone())).collect())
 }
 
-fn foo_statement(statement: full_moon::ast::Stmt) -> full_moon::ast::Stmt
+fn simplify_local_assignment(local_assignment: full_moon::ast::LocalAssignment) -> full_moon::ast::LocalAssignment
+{
+    local_assignment.clone().with_expressions(local_assignment.expressions().clone())
+}
+
+fn simplify_statement(statement: full_moon::ast::Stmt) -> full_moon::ast::Stmt
 {
     match statement
     {
         full_moon::ast::Stmt::LocalAssignment(local_assignment) =>
         {
             return full_moon::ast::Stmt::LocalAssignment(
-                foo_local_assignment(local_assignment.clone()))
+                simplify_local_assignment(local_assignment.clone()))
         },
         _ => statement,
     }
 }
 
-fn foo_block(block: full_moon::ast::Block) -> full_moon::ast::Block
+fn simplify_block(block: full_moon::ast::Block) -> full_moon::ast::Block
 {
     block.clone().with_stmts(
         block.stmts_with_semicolon().map(
             |(statement, token_reference)|
-                (foo_statement(statement.clone()), token_reference.clone())
+                (simplify_statement(statement.clone()), token_reference.clone())
         ).collect())
 }
 
-pub fn foo(input_ast: Ast) -> Ast
+pub fn simplify_ast(input_ast: Ast) -> Ast
 {
-    input_ast.clone().with_nodes(foo_block(input_ast.nodes().clone()))
+    input_ast.clone().with_nodes(simplify_block(input_ast.nodes().clone()))
 }
 
 #[cfg(test)]
 mod tests
 {
 use full_moon::parse_fallible;
-use crate::simplify::foo;
+use crate::simplify::simplify_ast;
 use crate::Config;
 use crate::format_ast;
 use crate::OutputVerification;
 
-
 fn simplify_code(code: &str) -> String {
     let config = Config::default();
-    format_ast(foo(parse_fallible(code, config.syntax.into()).into_result().unwrap()),
+    format_ast(simplify_ast(parse_fallible(code, config.syntax.into()).into_result().unwrap()),
         config, None, OutputVerification::None).unwrap().to_string()
 }
 
@@ -395,6 +471,13 @@ return jeff
     }
 
     #[test]
+    fn not_false() {
+        input_output(
+            "local x = not false\n",
+            "local x = true\n");
+    }
+
+    #[test]
     fn not_true() {
         input_output(
             "local x = not true\n",
@@ -402,10 +485,17 @@ return jeff
     }
 
     #[test]
-    fn not_false() {
+    fn not_with_parenthetical_false() {
         input_output(
-            "local x = not false\n",
+            "local x = not (false and y)\n",
             "local x = true\n");
+    }
+
+    #[test]
+    fn not_with_parenthetical_true() {
+        input_output(
+            "local x = not (true or y)\n",
+            "local x = false\n");
     }
 
     #[test]

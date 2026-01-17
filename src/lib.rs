@@ -469,7 +469,7 @@ pub fn format_code(
 
     if config.functional_style_enabled
     {
-        input_ast = simplify::foo(input_ast);
+        input_ast = simplify::simplify_ast(input_ast);
     }
 
     let ast = format_ast(input_ast, config, range, verify_output)?;
