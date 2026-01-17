@@ -8,6 +8,7 @@ use full_moon::ast::FunctionCall;
 
 use full_moon::ast::Expression;
 use full_moon::ast::Expression::UnaryOperator;
+use full_moon::ast::Prefix;
 use full_moon::ast::Suffix;
 use full_moon::ast::Call;
 use full_moon::ast::FunctionArgs;
@@ -38,7 +39,25 @@ fn simplify_call(call: &Call) -> Call
     match call
     {
         Call::AnonymousCall(function_args) => Call::AnonymousCall(simplify_function_args(function_args)),
-        Call::MethodCall(method_call) => Call::MethodCall(method_call.clone()),
+        Call::MethodCall(method_call) =>
+        {
+            Call::MethodCall(
+            method_call.clone().with_args(simplify_function_args(method_call.args())))
+        },
+        &_ => todo!(),
+    }
+}
+
+fn simplify_prefix(prefix: &Prefix) -> Prefix
+{
+    match prefix
+    {
+        Prefix::Expression(expression_box) =>
+            Prefix::Expression(Box::new(simplify_expression(*expression_box.clone()))),
+
+        Prefix::Name(_token_reference) =>
+            prefix.clone(),
+
         &_ => todo!(),
     }
 }
@@ -69,8 +88,11 @@ fn simplify_suffix(suffix: &Suffix) -> Suffix
 
 fn simplify_function_call(function_call: FunctionCall) -> FunctionCall
 {
+    let prefix = simplify_prefix(function_call.prefix());
+
     let suffixes = function_call.suffixes().map(|suffix| simplify_suffix(suffix)).collect();
-    function_call.with_suffixes(suffixes)
+
+    function_call.with_prefix(prefix).with_suffixes(suffixes)
 }
 
 fn simplify_expression(expression: full_moon::ast::Expression) -> full_moon::ast::Expression
@@ -503,5 +525,26 @@ return jeff
         input_output(
             "local x = foo(true or y)\n",
             "local x = foo(true)\n");
+    }
+
+    #[test]
+    fn expression_in_argument_of_method() {
+        input_output(
+            "local x = obj:foo(true or y)\n",
+            "local x = obj:foo(true)\n");
+    }
+
+    #[test]
+    fn expression_in_argument_of_method_on_result_of_getter() {
+        input_output(
+            "local x = getObj():foo(true or y)\n",
+            "local x = getObj():foo(true)\n");
+    }
+
+    #[test]
+    fn expression_in_back_of_method_call() {
+        input_output(
+            "local x = (true and obj):foo()\n",
+            "local x = (obj):foo()\n");
     }
 }
