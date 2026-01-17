@@ -224,45 +224,45 @@ fn replace_expressions(
     new_expressions
 }
 
-fn foo_local_assignment(local_assignment: full_moon::ast::LocalAssignment) -> full_moon::ast::LocalAssignment
+fn simplify_local_assignment(local_assignment: full_moon::ast::LocalAssignment) -> full_moon::ast::LocalAssignment
 {
     local_assignment.clone().with_expressions(replace_expressions(local_assignment.expressions().clone(),
         local_assignment.expressions().iter().map(
         |expression| simplify_expression(expression.clone())).collect()))
 }
 
-fn foo_statement(statement: full_moon::ast::Stmt) -> full_moon::ast::Stmt
+fn simplify_statement(statement: full_moon::ast::Stmt) -> full_moon::ast::Stmt
 {
     match statement
     {
         full_moon::ast::Stmt::LocalAssignment(local_assignment) =>
         {
             return full_moon::ast::Stmt::LocalAssignment(
-                foo_local_assignment(local_assignment.clone()))
+                simplify_local_assignment(local_assignment.clone()))
         },
         _ => statement,
     }
 }
 
-fn foo_block(block: full_moon::ast::Block) -> full_moon::ast::Block
+fn simplify_block(block: full_moon::ast::Block) -> full_moon::ast::Block
 {
     block.clone().with_stmts(
         block.stmts_with_semicolon().map(
             |(statement, token_reference)|
-                (foo_statement(statement.clone()), token_reference.clone())
+                (simplify_statement(statement.clone()), token_reference.clone())
         ).collect())
 }
 
-pub fn foo(input_ast: Ast) -> Ast
+pub fn simplify_ast(input_ast: Ast) -> Ast
 {
-    input_ast.clone().with_nodes(foo_block(input_ast.nodes().clone()))
+    input_ast.clone().with_nodes(simplify_block(input_ast.nodes().clone()))
 }
 
 #[cfg(test)]
 mod tests
 {
 use full_moon::parse_fallible;
-use crate::simplify::foo;
+use crate::simplify::simplify_ast;
 use crate::Config;
 use crate::format_ast;
 use crate::OutputVerification;
@@ -270,7 +270,7 @@ use crate::OutputVerification;
 
 fn simplify_code(code: &str) -> String {
     let config = Config::default();
-    format_ast(foo(parse_fallible(code, config.syntax.into()).into_result().unwrap()),
+    format_ast(simplify_ast(parse_fallible(code, config.syntax.into()).into_result().unwrap()),
         config, None, OutputVerification::None).unwrap().to_string()
 }
 
