@@ -224,11 +224,16 @@ fn replace_expressions(
     new_expressions
 }
 
+fn simplify_punctuated_expressions(punctuated_expressions :&Punctuated<Expression>) -> Punctuated<Expression>
+{
+    replace_expressions(punctuated_expressions.clone(),
+        punctuated_expressions.iter().map(
+        |expression| simplify_expression(expression.clone())).collect())
+}
+
 fn simplify_local_assignment(local_assignment: full_moon::ast::LocalAssignment) -> full_moon::ast::LocalAssignment
 {
-    local_assignment.clone().with_expressions(replace_expressions(local_assignment.expressions().clone(),
-        local_assignment.expressions().iter().map(
-        |expression| simplify_expression(expression.clone())).collect()))
+    local_assignment.clone().with_expressions(simplify_punctuated_expressions(local_assignment.expressions()))
 }
 
 fn simplify_statement(statement: full_moon::ast::Stmt) -> full_moon::ast::Stmt
