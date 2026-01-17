@@ -12,6 +12,10 @@ use full_moon::ast::Prefix;
 use full_moon::ast::Suffix;
 use full_moon::ast::Call;
 use full_moon::ast::FunctionArgs;
+use full_moon::ast::LocalAssignment;
+use full_moon::ast::If;
+use full_moon::ast::Do;
+use full_moon::ast::Stmt;
 
 use full_moon::tokenizer::TokenReference;
 use full_moon::tokenizer::Token;
@@ -325,21 +329,52 @@ fn simplify_punctuated_expressions(punctuated_expressions :&Punctuated<Expressio
         |expression| simplify_expression(expression.clone())).collect())
 }
 
-fn simplify_local_assignment(local_assignment: full_moon::ast::LocalAssignment) -> full_moon::ast::LocalAssignment
+fn simplify_local_assignment(local_assignment: &LocalAssignment) -> full_moon::ast::LocalAssignment
 {
     local_assignment.clone().with_expressions(simplify_punctuated_expressions(local_assignment.expressions()))
 }
 
-fn simplify_statement(statement: full_moon::ast::Stmt) -> full_moon::ast::Stmt
+fn simplify_if_statement(if_statement: &If) -> Stmt
+{
+    let new_condition = simplify_expression(if_statement.condition().clone());
+    match new_condition
+    {
+        full_moon::ast::Expression::Symbol(ref token_reference) =>
+        {
+            match token_reference.token().token_type()
+            {
+                full_moon::tokenizer::TokenType::Symbol{ symbol } =>
+                {
+                    match symbol
+                    {
+                        True => return Stmt::Do(Do::new().with_block(if_statement.block().clone())),
+                        _ => {},
+                    }
+                },
+                _ => {},
+            }
+        },
+        _ => {},
+    }
+
+    Stmt::If(if_statement.clone().with_condition(new_condition))
+}
+
+fn simplify_statement(statement: &Stmt) -> Stmt
 {
     match statement
     {
         full_moon::ast::Stmt::LocalAssignment(local_assignment) =>
         {
             return full_moon::ast::Stmt::LocalAssignment(
-                simplify_local_assignment(local_assignment.clone()))
+                simplify_local_assignment(&local_assignment))
         },
-        _ => statement,
+
+        full_moon::ast::Stmt::If(if_statement) =>
+        {
+            return simplify_if_statement(&if_statement)
+        },
+        _ => statement.clone(),
     }
 }
 
@@ -348,7 +383,7 @@ fn simplify_block(block: full_moon::ast::Block) -> full_moon::ast::Block
     block.clone().with_stmts(
         block.stmts_with_semicolon().map(
             |(statement, token_reference)|
-                (simplify_statement(statement.clone()), token_reference.clone())
+                (simplify_statement(statement), token_reference.clone())
         ).collect())
 }
 
@@ -546,5 +581,12 @@ return jeff
         input_output(
             "local x = (true and obj):foo()\n",
             "local x = (obj):foo()\n");
+    }
+
+    #[test]
+    fn bool_literal_in_if_statement() {
+        input_output(
+            "if true then foo() else bar() end\n",
+            "do\n\tfoo()\nend\n")
     }
 }
