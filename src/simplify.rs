@@ -16,6 +16,7 @@ use full_moon::ast::LocalAssignment;
 use full_moon::ast::If;
 use full_moon::ast::Do;
 use full_moon::ast::Stmt;
+use full_moon::ast::Block;
 
 use full_moon::tokenizer::TokenReference;
 use full_moon::tokenizer::Token;
@@ -99,7 +100,7 @@ fn simplify_function_call(function_call: FunctionCall) -> FunctionCall
     function_call.with_prefix(prefix).with_suffixes(suffixes)
 }
 
-fn simplify_expression(expression: full_moon::ast::Expression) -> full_moon::ast::Expression
+fn simplify_expression(expression: Expression) -> Expression
 {
     match expression
     {
@@ -334,9 +335,8 @@ fn simplify_local_assignment(local_assignment: &LocalAssignment) -> full_moon::a
     local_assignment.clone().with_expressions(simplify_punctuated_expressions(local_assignment.expressions()))
 }
 
-fn simplify_if_statement(if_statement: &If) -> Stmt
+fn is_just_true(new_condition: &Expression) -> bool
 {
-    let new_condition = simplify_expression(if_statement.condition().clone());
     match new_condition
     {
         full_moon::ast::Expression::Symbol(ref token_reference) =>
@@ -347,17 +347,56 @@ fn simplify_if_statement(if_statement: &If) -> Stmt
                 {
                     match symbol
                     {
-                        True => return Stmt::Do(Do::new().with_block(if_statement.block().clone())),
-                        _ => {},
+                        True => return true,
+                        _ => false,
                     }
                 },
-                _ => {},
+                _ => false,
             }
         },
-        _ => {},
+        _ => false,
+    }
+}
+
+fn simplify_if_statement(if_statement: &If) -> Stmt
+{
+    let new_condition = simplify_expression(if_statement.condition().clone());
+    let new_block = simplify_block(if_statement.block());
+
+    if is_just_true(&new_condition)
+    {
+        return Stmt::Do(Do::new().with_block(new_block))
     }
 
-    Stmt::If(if_statement.clone().with_condition(new_condition))
+    let mut new_if_statement = If::new(new_condition).with_block(new_block);
+
+    if let Some(elseifs) = if_statement.else_if()
+    {
+        let mut new_elseifs = Vec::new();
+        for else_if_clause in elseifs
+        {
+            let new_clause_condition = simplify_expression(else_if_clause.condition().clone());
+            let new_clause_block = simplify_block(else_if_clause.block());
+
+            if is_just_true(&new_clause_condition)
+            {
+                return Stmt::If(new_if_statement
+                    .with_else_token(Some(TokenReference::symbol("else").unwrap()))
+                    .with_else(Some(new_clause_block)));
+            }
+            new_elseifs.push(else_if_clause.clone())
+        }
+        new_if_statement = new_if_statement.with_else_if(Some(new_elseifs));
+    }
+
+    if let Some(else_block) = if_statement.else_block()
+    {
+        new_if_statement = new_if_statement
+            .with_else_token(Some(TokenReference::symbol("else").unwrap()))
+            .with_else(Some(simplify_block(else_block)));
+    }
+
+    Stmt::If(new_if_statement)
 }
 
 fn simplify_statement(statement: &Stmt) -> Stmt
@@ -378,7 +417,7 @@ fn simplify_statement(statement: &Stmt) -> Stmt
     }
 }
 
-fn simplify_block(block: full_moon::ast::Block) -> full_moon::ast::Block
+fn simplify_block(block: &Block) -> Block
 {
     block.clone().with_stmts(
         block.stmts_with_semicolon().map(
@@ -389,7 +428,7 @@ fn simplify_block(block: full_moon::ast::Block) -> full_moon::ast::Block
 
 pub fn simplify_ast(input_ast: Ast) -> Ast
 {
-    input_ast.clone().with_nodes(simplify_block(input_ast.nodes().clone()))
+    input_ast.clone().with_nodes(simplify_block(input_ast.nodes()))
 }
 
 #[cfg(test)]
@@ -410,6 +449,11 @@ fn simplify_code(code: &str) -> String {
 fn input_output(input: &str, expected_output: &str)
 {
     assert_eq!(simplify_code(input), expected_output);
+}
+
+fn check_unchanged(input: &str)
+{
+    assert_eq!(simplify_code(input), input);
 }
 
 #[test]
@@ -588,5 +632,77 @@ return jeff
         input_output(
             "if true then foo() else bar() end\n",
             "do\n\tfoo()\nend\n")
+    }
+
+    #[test]
+    fn if_block_continues_to_simplify() {
+        input_output("\
+if first then
+    local x = true and true
+end",
+            "if first then\n\tlocal x = true\nend\n")
+    }
+
+    #[test]
+    fn bool_true_expression_in_if_statement() {
+        input_output(
+            "if true and true then foo() else bar() end\n",
+            "do\n\tfoo()\nend\n")
+    }
+
+    #[test]
+    fn literal_true_in_if_statement_with_elseifs() {
+        input_output(
+"if true then
+    foo()
+elseif something then
+    bar1()
+elseif something then
+    bar2()
+end\n",
+            "do\n\tfoo()\nend\n")
+    }
+
+    #[test]
+    fn elseifs_all_stay_no_else() {
+        check_unchanged("\
+if first then
+\tfoo()
+elseif second then
+\tbar1()
+elseif third then
+\tbar2()
+end\n");
+    }
+
+    #[test]
+    fn elseifs_all_stay_and_else() {
+        check_unchanged("\
+if first then
+\tfoo()
+elseif second then
+\tbar1()
+elseif third then
+\tbar2()
+else
+\tbar3()
+end\n");
+    }
+
+    #[test]
+    fn literal_true_in_elseif_condition() {
+        input_output("\
+if first then
+\tfoo()
+elseif true then
+\tbar1()
+elseif third then
+\tbar2()
+end\n", "\
+if first then
+\tfoo()
+else
+\tbar1()
+end\n")
     }
 }
