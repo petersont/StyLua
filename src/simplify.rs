@@ -59,7 +59,7 @@ fn simplify_prefix(prefix: &Prefix) -> Prefix
     match prefix
     {
         Prefix::Expression(expression_box) =>
-            Prefix::Expression(Box::new(simplify_expression(*expression_box.clone()))),
+            Prefix::Expression(Box::new(simplify_expression(&*expression_box))),
 
         Prefix::Name(_token_reference) =>
             prefix.clone(),
@@ -99,7 +99,7 @@ fn simplify_function_call(function_call: &FunctionCall) -> FunctionCall
     function_call.clone().with_prefix(prefix).with_suffixes(suffixes)
 }
 
-fn simplify_expression(expression: Expression) -> Expression
+fn simplify_expression(expression: &Expression) -> Expression
 {
     match expression
     {
@@ -108,7 +108,7 @@ fn simplify_expression(expression: Expression) -> Expression
 
         full_moon::ast::Expression::Parentheses{ref contained, ref expression} =>
         {
-            let new_inside_expression = simplify_expression(*expression.clone());
+            let new_inside_expression = simplify_expression(&*expression);
             match new_inside_expression
             {
                 Expression::Symbol(ref _symbol) =>
@@ -129,10 +129,10 @@ fn simplify_expression(expression: Expression) -> Expression
             {
                 Not(_) =>
                 {
-                    let new_expression = simplify_expression(*expression.clone());
+                    let new_expression = simplify_expression(expression);
                     match new_expression
                     {
-                        full_moon::ast::Expression::Symbol(ref token_reference) =>
+                        Expression::Symbol(ref token_reference) =>
                         {
                             let leading_trivia = token_reference.leading_trivia().map(|x| x.clone()).collect();
                             let trailing_trivia = token_reference.trailing_trivia().map(|x| x.clone()).collect();
@@ -144,14 +144,14 @@ fn simplify_expression(expression: Expression) -> Expression
                                     match symbol
                                     {
                                         True =>
-                                            return full_moon::ast::Expression::Symbol(TokenReference::new(
+                                            return Expression::Symbol(TokenReference::new(
                                                 leading_trivia,
                                                 Token::new(Symbol{symbol:False}),
                                                 trailing_trivia,
                                             )),
 
                                         False =>
-                                            return full_moon::ast::Expression::Symbol(TokenReference::new(
+                                            return Expression::Symbol(TokenReference::new(
                                                 leading_trivia,
                                                 Token::new(Symbol{symbol:True}),
                                                 trailing_trivia,
@@ -166,21 +166,23 @@ fn simplify_expression(expression: Expression) -> Expression
                         _ => {},
                     }
 
-                    return UnaryOperator{unop: unop.clone(), expression: Box::new(new_expression.clone())};
+                    return UnaryOperator{unop: unop.clone(), expression: Box::new(new_expression)};
                 }
                 _ => {},
             }
         },
-        full_moon::ast::Expression::BinaryOperator{ref lhs, ref binop, ref rhs} =>
+        Expression::BinaryOperator{ref lhs, ref binop, ref rhs} =>
         {
+            let left_expression : &Expression = &*lhs;
+            let right_expression : &Expression = &*rhs;
+
             match binop
             {
                 Or(_) =>
                 {
-                    let lhs_clone = *lhs.clone();
-                    match lhs_clone
+                    match left_expression
                     {
-                        full_moon::ast::Expression::Symbol(token_reference) =>
+                        Expression::Symbol(token_reference) =>
                         {
                             match token_reference.token().token_type()
                             {
@@ -189,10 +191,10 @@ fn simplify_expression(expression: Expression) -> Expression
                                     match symbol
                                     {
                                         True =>
-                                            return Expression::Symbol(token_reference),
+                                            return Expression::Symbol(token_reference.clone()),
 
                                         False =>
-                                            return *rhs.clone(),
+                                            return simplify_expression(right_expression),
 
                                         _ => {},
                                     }
@@ -204,10 +206,9 @@ fn simplify_expression(expression: Expression) -> Expression
                         _ => {},
                     }
 
-                    let rhs_clone = *rhs.clone();
-                    match rhs_clone
+                    match right_expression
                     {
-                        full_moon::ast::Expression::Symbol(token_reference) =>
+                        Expression::Symbol(token_reference) =>
                         {
                             match token_reference.token().token_type()
                             {
@@ -216,10 +217,11 @@ fn simplify_expression(expression: Expression) -> Expression
                                     match symbol
                                     {
                                         True =>
-                                            return Expression::Symbol(token_reference),
+                                            return Expression::Symbol(token_reference.clone()),
 
                                         False =>
-                                            return *lhs.clone(),
+                                            return simplify_expression(left_expression),
+
                                         _ => {},
                                     }
                                 },
@@ -233,10 +235,12 @@ fn simplify_expression(expression: Expression) -> Expression
 
                 And(_) =>
                 {
-                    let lhs_clone = *lhs.clone();
-                    match lhs_clone
+                    let left_expression : &Expression = &*lhs;
+                    let right_expression : &Expression = &*rhs;
+
+                    match left_expression
                     {
-                        full_moon::ast::Expression::Symbol(token_reference) =>
+                        Expression::Symbol(token_reference) =>
                         {
                             match token_reference.token().token_type()
                             {
@@ -245,10 +249,10 @@ fn simplify_expression(expression: Expression) -> Expression
                                     match symbol
                                     {
                                         False =>
-                                            return Expression::Symbol(token_reference),
+                                            return Expression::Symbol(token_reference.clone()),
 
                                         True =>
-                                            return *rhs.clone(),
+                                            return simplify_expression(right_expression),
                                         _ => {},
                                     }
                                 },
@@ -259,10 +263,9 @@ fn simplify_expression(expression: Expression) -> Expression
                         _ => {},
                     }
 
-                    let rhs_clone = *rhs.clone();
-                    match rhs_clone
+                    match right_expression
                     {
-                        full_moon::ast::Expression::Symbol(token_reference) =>
+                        Expression::Symbol(token_reference) =>
                         {
                             match token_reference.token().token_type()
                             {
@@ -271,10 +274,10 @@ fn simplify_expression(expression: Expression) -> Expression
                                     match symbol
                                     {
                                         False =>
-                                            return Expression::Symbol(token_reference),
+                                            return Expression::Symbol(token_reference.clone()),
 
                                         True =>
-                                            return *lhs.clone(),
+                                            return simplify_expression(left_expression),
                                         _ => {},
                                     }
                                 },
@@ -290,15 +293,15 @@ fn simplify_expression(expression: Expression) -> Expression
             }
 
             return Expression::BinaryOperator{
-                lhs: Box::new(simplify_expression(*lhs.clone())),
+                lhs: Box::new(simplify_expression(left_expression)),
                 binop: binop.clone(),
-                rhs: Box::new(simplify_expression(*rhs.clone())),
+                rhs: Box::new(simplify_expression(right_expression)),
             };
         },
         _ => {},
     }
 
-    expression
+    expression.clone()
 }
 
 fn replace_expressions(
@@ -326,7 +329,7 @@ fn simplify_punctuated_expressions(punctuated_expressions :&Punctuated<Expressio
 {
     replace_expressions(punctuated_expressions.clone(),
         punctuated_expressions.iter().map(
-        |expression| simplify_expression(expression.clone())).collect())
+        |expression| simplify_expression(expression)).collect())
 }
 
 fn simplify_local_assignment(local_assignment: &LocalAssignment) -> Vec<Stmt>
@@ -342,7 +345,7 @@ fn is_just_true(new_condition: &Expression) -> bool
 {
     match new_condition
     {
-        full_moon::ast::Expression::Symbol(ref token_reference) =>
+        Expression::Symbol(ref token_reference) =>
         {
             match token_reference.token().token_type()
             {
@@ -365,7 +368,7 @@ fn is_just_false(new_condition: &Expression) -> bool
 {
     match new_condition
     {
-        full_moon::ast::Expression::Symbol(ref token_reference) =>
+        Expression::Symbol(ref token_reference) =>
         {
             match token_reference.token().token_type()
             {
@@ -459,7 +462,7 @@ fn simplify_if_statement(if_statement: &If) -> Vec<Stmt>
 {
     let mut clauses = vec![];
 
-    let new_condition = simplify_expression(if_statement.condition().clone());
+    let new_condition = simplify_expression(if_statement.condition());
     let new_block = simplify_block(if_statement.block());
 
     if ! is_just_false(&new_condition)
@@ -474,7 +477,7 @@ fn simplify_if_statement(if_statement: &If) -> Vec<Stmt>
     {
         for else_if_clause in elseifs
         {
-            let new_condition = simplify_expression(else_if_clause.condition().clone());
+            let new_condition = simplify_expression(else_if_clause.condition());
             if is_just_false(&new_condition)
             {
                 continue;
@@ -586,59 +589,87 @@ return jeff
     }
 
     #[test]
-    fn bool_or_lhs() {
+    fn bool_or_left_expression() {
         input_output(
             "local x = true or y\n",
             "local x = true\n");
     }
 
     #[test]
-    fn bool_or_rhs() {
+    fn bool_or_right_expression() {
         input_output(
             "local x = y or true\n",
             "local x = true\n");
     }
 
     #[test]
-    fn bool_and_lhs() {
+    fn bool_and_left_expression() {
         input_output(
             "local x = false and z\n",
             "local x = false\n");
     }
 
     #[test]
-    fn bool_and_rhs() {
+    fn bool_and_right_expression() {
         input_output(
             "local x = y and false\n",
             "local x = false\n");
     }
 
     #[test]
-    fn bool_or_identity_lhs() {
+    fn bool_or_identity_left_expression() {
         input_output(
-            "local x = false or y\n",
-            "local x = y\n");
+            "local x = false or apple\n",
+            "local x = apple\n");
     }
 
     #[test]
-    fn bool_or_identity_rhs() {
+    fn bool_or_identity_left_expression_compound() {
         input_output(
-            "local x = y or false\n",
-            "local x = y\n");
+            "local x = false or true and cherry\n",
+            "local x = cherry\n");
     }
 
     #[test]
-    fn bool_and_identity_lhs() {
+    fn bool_or_identity_right_expression() {
         input_output(
-            "local x = true and y\n",
-            "local x = y\n");
+            "local x = banana or false\n",
+            "local x = banana\n");
     }
 
     #[test]
-    fn bool_and_identity_rhs() {
+    fn bool_or_identity_right_expression_compound() {
         input_output(
-            "local x = y and true\n",
-            "local x = y\n");
+            "local x = false or fig or false\n",
+            "local x = fig\n");
+    }
+
+    #[test]
+    fn bool_and_identity_left_expression() {
+        input_output(
+            "local x = true and grapefruit\n",
+            "local x = grapefruit\n");
+    }
+
+    #[test]
+    fn bool_and_identity_left_expression_compound() {
+        input_output(
+            "local x = true and (false or grapefruit)\n",
+            "local x = grapefruit\n");
+    }
+
+    #[test]
+    fn bool_and_identity_right_expression() {
+        input_output(
+            "local x = cantaloupe and true\n",
+            "local x = cantaloupe\n");
+    }
+
+    #[test]
+    fn bool_and_identity_right_expression_compound() {
+        input_output(
+            "local x = durian and true and true\n",
+            "local x = durian\n");
     }
 
     #[test]
