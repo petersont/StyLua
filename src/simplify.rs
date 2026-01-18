@@ -18,6 +18,7 @@ use full_moon::ast::ElseIf;
 use full_moon::ast::Do;
 use full_moon::ast::Stmt;
 use full_moon::ast::Block;
+use full_moon::ast::span::ContainedSpan;
 
 use full_moon::tokenizer::TokenReference;
 use full_moon::tokenizer::Token;
@@ -99,6 +100,19 @@ fn simplify_function_call(function_call: &FunctionCall) -> FunctionCall
     function_call.clone().with_prefix(prefix).with_suffixes(suffixes)
 }
 
+fn simplify_parentheses(contained: &ContainedSpan, expression: &Expression) -> Expression
+{
+    let new_inside_expression = simplify_expression(expression);
+    match new_inside_expression
+    {
+        Expression::Symbol(ref _symbol) => new_inside_expression,
+        _ => Expression::Parentheses{
+            contained: contained.clone(),
+            expression: Box::new(new_inside_expression),
+        }
+    }
+}
+
 fn simplify_expression(expression: &Expression) -> Expression
 {
     match expression
@@ -106,23 +120,9 @@ fn simplify_expression(expression: &Expression) -> Expression
         Expression::FunctionCall(function_call) =>
             return Expression::FunctionCall(simplify_function_call(&function_call)),
 
-        full_moon::ast::Expression::Parentheses{ref contained, ref expression} =>
-        {
-            let new_inside_expression = simplify_expression(&*expression);
-            match new_inside_expression
-            {
-                Expression::Symbol(ref _symbol) =>
-                {
-                    return new_inside_expression;
-                },
-                _ => {},
-            }
+        full_moon::ast::Expression::Parentheses{contained, expression} =>
+            return simplify_parentheses(&contained, &*expression),
 
-            return Expression::Parentheses{
-                contained: contained.clone(),
-                expression: Box::new(new_inside_expression),
-            };
-        },
         UnaryOperator{ref unop, ref expression} =>
         {
             match unop
