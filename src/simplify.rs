@@ -16,6 +16,8 @@ use full_moon::ast::If;
 use full_moon::ast::ElseIf;
 use full_moon::ast::Do;
 use full_moon::ast::While;
+use full_moon::ast::FunctionDeclaration;
+use full_moon::ast::FunctionBody;
 use full_moon::ast::Stmt;
 use full_moon::ast::Block;
 use full_moon::ast::UnOp;
@@ -509,13 +511,33 @@ fn simplify_if_statement(if_statement: &If) -> Vec<Stmt>
     clauses_to_statements(clauses)
 }
 
-fn simplify_while_statement(while_statement: &While) -> Vec<Stmt>
+fn simplify_while_loop(while_loop: &While) -> Vec<Stmt>
 {
+    let new_condition = simplify_expression(while_loop.condition());
+    let new_block = simplify_block(while_loop.block());
+
     vec![
         Stmt::While(
-            while_statement.clone()
-                .with_condition(simplify_expression(while_statement.condition()))
-                .with_block(simplify_block(while_statement.block()))
+            while_loop.clone()
+                .with_condition(new_condition)
+                .with_block(new_block)
+        )
+    ]
+}
+
+fn simplify_function_body(function_body: &FunctionBody) -> FunctionBody
+{
+    let new_block = simplify_block(function_body.block());
+    function_body.clone().with_block(new_block)
+}
+
+fn simplify_function_declaration(function_declaration: &FunctionDeclaration) -> Vec<Stmt>
+{
+    let new_body = simplify_function_body(function_declaration.body());
+    vec![
+        Stmt::FunctionDeclaration(
+            function_declaration.clone()
+                .with_body(new_body)
         )
     ]
 }
@@ -530,8 +552,11 @@ fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
         Stmt::If(if_statement) =>
             simplify_if_statement(&if_statement),
 
-        Stmt::While(while_statement) =>
-            simplify_while_statement(&while_statement),
+        Stmt::While(while_loop) =>
+            simplify_while_loop(&while_loop),
+
+        Stmt::FunctionDeclaration(function_declaration) =>
+            simplify_function_declaration(&function_declaration),
 
         _ => vec![statement.clone()],
     }
@@ -965,6 +990,15 @@ end\n",
         input_output(
             "while true do local x = false or false end",
             "while true do\n\tlocal x = false\nend\n",
+        )
+    }
+
+    #[test]
+    fn function_continues_into_body()
+    {
+        input_output(
+            "function foo() local x = true and true end",
+            "function foo()\n\tlocal x = true\nend\n",
         )
     }
 }
