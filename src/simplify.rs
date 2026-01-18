@@ -7,7 +7,6 @@ use full_moon::ast::UnOp::Not;
 use full_moon::ast::FunctionCall;
 
 use full_moon::ast::Expression;
-use full_moon::ast::Expression::UnaryOperator;
 use full_moon::ast::Prefix;
 use full_moon::ast::Suffix;
 use full_moon::ast::Call;
@@ -18,6 +17,8 @@ use full_moon::ast::ElseIf;
 use full_moon::ast::Do;
 use full_moon::ast::Stmt;
 use full_moon::ast::Block;
+use full_moon::ast::UnOp;
+use full_moon::ast::BinOp;
 use full_moon::ast::span::ContainedSpan;
 
 use full_moon::tokenizer::TokenReference;
@@ -105,11 +106,185 @@ fn simplify_parentheses(contained: &ContainedSpan, expression: &Expression) -> E
     let new_inside_expression = simplify_expression(expression);
     match new_inside_expression
     {
-        Expression::Symbol(ref _symbol) => new_inside_expression,
+        Expression::Symbol(_) => new_inside_expression,
         _ => Expression::Parentheses{
             contained: contained.clone(),
             expression: Box::new(new_inside_expression),
         }
+    }
+}
+
+fn simplify_unary_operator(unop: &UnOp, expression: &Expression) -> Expression
+{
+    let new_expression = simplify_expression(expression);
+    match unop
+    {
+        Not(_) =>
+        {
+            match new_expression
+            {
+                Expression::Symbol(ref token_reference) =>
+                {
+                    let leading_trivia = token_reference.leading_trivia().map(|x| x.clone()).collect();
+                    let trailing_trivia = token_reference.trailing_trivia().map(|x| x.clone()).collect();
+
+                    match token_reference.token().token_type()
+                    {
+                        full_moon::tokenizer::TokenType::Symbol{ symbol } =>
+                        {
+                            match symbol
+                            {
+                                True =>
+                                    return Expression::Symbol(TokenReference::new(
+                                        leading_trivia,
+                                        Token::new(Symbol{symbol:False}),
+                                        trailing_trivia,
+                                    )),
+
+                                False =>
+                                    return Expression::Symbol(TokenReference::new(
+                                        leading_trivia,
+                                        Token::new(Symbol{symbol:True}),
+                                        trailing_trivia,
+                                    )),
+
+                                _ => {},
+                            }
+                        },
+                        _ => {},
+                    }
+                },
+                _ => {},
+            }
+        }
+        _ => {},
+    }
+
+    return Expression::UnaryOperator{unop: unop.clone(), expression: Box::new(new_expression)};
+}
+
+fn simplify_binary_operator(left_expression : &Expression, binop: &BinOp, right_expression : &Expression) -> Expression
+{
+    let new_left_expression = simplify_expression(left_expression);
+    let new_right_expression = simplify_expression(right_expression);
+
+    match binop
+    {
+        Or(_) =>
+        {
+            match left_expression
+            {
+                Expression::Symbol(token_reference) =>
+                {
+                    match token_reference.token().token_type()
+                    {
+                        full_moon::tokenizer::TokenType::Symbol{ symbol } =>
+                        {
+                            match symbol
+                            {
+                                True =>
+                                    return Expression::Symbol(token_reference.clone()),
+
+                                False =>
+                                    return new_right_expression,
+
+                                _ => {},
+                            }
+                        },
+                        _ => {},
+                    }
+                },
+
+                _ => {},
+            }
+
+            match right_expression
+            {
+                Expression::Symbol(token_reference) =>
+                {
+                    match token_reference.token().token_type()
+                    {
+                        full_moon::tokenizer::TokenType::Symbol{ symbol } =>
+                        {
+                            match symbol
+                            {
+                                True =>
+                                    return Expression::Symbol(token_reference.clone()),
+
+                                False =>
+                                    return new_left_expression,
+
+                                _ => {},
+                            }
+                        },
+                        _ => {},
+                    }
+                },
+
+                _ => {},
+            }
+        },
+
+        And(_) =>
+        {
+            match left_expression
+            {
+                Expression::Symbol(token_reference) =>
+                {
+                    match token_reference.token().token_type()
+                    {
+                        full_moon::tokenizer::TokenType::Symbol{ symbol } =>
+                        {
+                            match symbol
+                            {
+                                False =>
+                                    return Expression::Symbol(token_reference.clone()),
+
+                                True =>
+                                    return new_right_expression,
+                                _ => {},
+                            }
+                        },
+                        _ => {},
+                    }
+                },
+
+                _ => {},
+            }
+
+            match right_expression
+            {
+                Expression::Symbol(token_reference) =>
+                {
+                    match token_reference.token().token_type()
+                    {
+                        full_moon::tokenizer::TokenType::Symbol{ symbol } =>
+                        {
+                            match symbol
+                            {
+                                False =>
+                                    return Expression::Symbol(token_reference.clone()),
+
+                                True =>
+                                    return new_left_expression,
+                                _ => {},
+                            }
+                        },
+                        _ => {},
+                    }
+                },
+
+                _ => {},
+            }
+        },
+
+        _ => {},
+    }
+
+    Expression::BinaryOperator{
+        lhs: Box::new(new_left_expression),
+        binop: binop.clone(),
+        rhs: Box::new(new_right_expression),
     }
 }
 
@@ -120,184 +295,15 @@ fn simplify_expression(expression: &Expression) -> Expression
         Expression::FunctionCall(function_call) =>
             return Expression::FunctionCall(simplify_function_call(&function_call)),
 
-        full_moon::ast::Expression::Parentheses{contained, expression} =>
+        Expression::Parentheses{contained, expression} =>
             return simplify_parentheses(&contained, &*expression),
 
-        UnaryOperator{ref unop, ref expression} =>
-        {
-            match unop
-            {
-                Not(_) =>
-                {
-                    let new_expression = simplify_expression(expression);
-                    match new_expression
-                    {
-                        Expression::Symbol(ref token_reference) =>
-                        {
-                            let leading_trivia = token_reference.leading_trivia().map(|x| x.clone()).collect();
-                            let trailing_trivia = token_reference.trailing_trivia().map(|x| x.clone()).collect();
+        Expression::UnaryOperator{unop, expression} =>
+            return simplify_unary_operator(&unop, &expression),
 
-                            match token_reference.token().token_type()
-                            {
-                                full_moon::tokenizer::TokenType::Symbol{ symbol } =>
-                                {
-                                    match symbol
-                                    {
-                                        True =>
-                                            return Expression::Symbol(TokenReference::new(
-                                                leading_trivia,
-                                                Token::new(Symbol{symbol:False}),
-                                                trailing_trivia,
-                                            )),
+        Expression::BinaryOperator{lhs, binop, rhs} =>
+            return simplify_binary_operator(&lhs, &binop, &rhs),
 
-                                        False =>
-                                            return Expression::Symbol(TokenReference::new(
-                                                leading_trivia,
-                                                Token::new(Symbol{symbol:True}),
-                                                trailing_trivia,
-                                            )),
-
-                                        _ => {},
-                                    }
-                                },
-                                _ => {},
-                            }
-                        },
-                        _ => {},
-                    }
-
-                    return UnaryOperator{unop: unop.clone(), expression: Box::new(new_expression)};
-                }
-                _ => {},
-            }
-        },
-        Expression::BinaryOperator{ref lhs, ref binop, ref rhs} =>
-        {
-            let left_expression : &Expression = &*lhs;
-            let right_expression : &Expression = &*rhs;
-
-            match binop
-            {
-                Or(_) =>
-                {
-                    match left_expression
-                    {
-                        Expression::Symbol(token_reference) =>
-                        {
-                            match token_reference.token().token_type()
-                            {
-                                full_moon::tokenizer::TokenType::Symbol{ symbol } =>
-                                {
-                                    match symbol
-                                    {
-                                        True =>
-                                            return Expression::Symbol(token_reference.clone()),
-
-                                        False =>
-                                            return simplify_expression(right_expression),
-
-                                        _ => {},
-                                    }
-                                },
-                                _ => {},
-                            }
-                        },
-
-                        _ => {},
-                    }
-
-                    match right_expression
-                    {
-                        Expression::Symbol(token_reference) =>
-                        {
-                            match token_reference.token().token_type()
-                            {
-                                full_moon::tokenizer::TokenType::Symbol{ symbol } =>
-                                {
-                                    match symbol
-                                    {
-                                        True =>
-                                            return Expression::Symbol(token_reference.clone()),
-
-                                        False =>
-                                            return simplify_expression(left_expression),
-
-                                        _ => {},
-                                    }
-                                },
-                                _ => {},
-                            }
-                        },
-
-                        _ => {},
-                    }
-                },
-
-                And(_) =>
-                {
-                    let left_expression : &Expression = &*lhs;
-                    let right_expression : &Expression = &*rhs;
-
-                    match left_expression
-                    {
-                        Expression::Symbol(token_reference) =>
-                        {
-                            match token_reference.token().token_type()
-                            {
-                                full_moon::tokenizer::TokenType::Symbol{ symbol } =>
-                                {
-                                    match symbol
-                                    {
-                                        False =>
-                                            return Expression::Symbol(token_reference.clone()),
-
-                                        True =>
-                                            return simplify_expression(right_expression),
-                                        _ => {},
-                                    }
-                                },
-                                _ => {},
-                            }
-                        },
-
-                        _ => {},
-                    }
-
-                    match right_expression
-                    {
-                        Expression::Symbol(token_reference) =>
-                        {
-                            match token_reference.token().token_type()
-                            {
-                                full_moon::tokenizer::TokenType::Symbol{ symbol } =>
-                                {
-                                    match symbol
-                                    {
-                                        False =>
-                                            return Expression::Symbol(token_reference.clone()),
-
-                                        True =>
-                                            return simplify_expression(left_expression),
-                                        _ => {},
-                                    }
-                                },
-                                _ => {},
-                            }
-                        },
-
-                        _ => {},
-                    }
-                },
-
-                _ => {},
-            }
-
-            return Expression::BinaryOperator{
-                lhs: Box::new(simplify_expression(left_expression)),
-                binop: binop.clone(),
-                rhs: Box::new(simplify_expression(right_expression)),
-            };
-        },
         _ => {},
     }
 
@@ -719,6 +725,13 @@ return jeff
         input_output(
             "local x = not true\n",
             "local x = false\n");
+    }
+
+    #[test]
+    fn negative_function_of_bool_expression() {
+        input_output(
+            "local x = -foo(true and true)\n",
+            "local x = -foo(true)\n");
     }
 
     #[test]
