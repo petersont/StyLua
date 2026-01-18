@@ -17,6 +17,7 @@ use full_moon::ast::ElseIf;
 use full_moon::ast::Do;
 use full_moon::ast::While;
 use full_moon::ast::FunctionDeclaration;
+use full_moon::ast::LocalFunction;
 use full_moon::ast::FunctionBody;
 use full_moon::ast::Stmt;
 use full_moon::ast::Block;
@@ -542,6 +543,16 @@ fn simplify_function_declaration(function_declaration: &FunctionDeclaration) -> 
     ]
 }
 
+fn simplify_local_function(local_function: &LocalFunction) -> Vec<Stmt>
+{
+    let new_body = simplify_function_body(local_function.body());
+    vec![
+        Stmt::LocalFunction(
+            local_function.clone().with_body(new_body)
+        )
+    ]
+}
+
 fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
 {
     match statement
@@ -557,6 +568,9 @@ fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
 
         Stmt::FunctionDeclaration(function_declaration) =>
             simplify_function_declaration(&function_declaration),
+
+        Stmt::LocalFunction(local_function) =>
+            simplify_local_function(&local_function),
 
         _ => vec![statement.clone()],
     }
@@ -999,6 +1013,15 @@ end\n",
         input_output(
             "function foo() local x = true and true end",
             "function foo()\n\tlocal x = true\nend\n",
+        )
+    }
+
+    #[test]
+    fn local_function_continues_into_body()
+    {
+        input_output(
+            "local function foo() local x = true and true end",
+            "local function foo()\n\tlocal x = true\nend\n",
         )
     }
 }
