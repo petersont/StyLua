@@ -20,6 +20,7 @@ use full_moon::ast::Do;
 use full_moon::ast::While;
 use full_moon::ast::FunctionDeclaration;
 use full_moon::ast::LocalFunction;
+use full_moon::ast::AnonymousFunction;
 use full_moon::ast::NumericFor;
 use full_moon::ast::Repeat;
 use full_moon::ast::FunctionBody;
@@ -114,10 +115,15 @@ fn simplify_parentheses(contained: &ContainedSpan, expression: &Expression) -> E
     let new_inside_expression = simplify_expression(expression);
     match new_inside_expression
     {
-        Expression::Symbol(_) => new_inside_expression,
+        Expression::Symbol(_) =>
+            new_inside_expression,
+
+        Expression::Var(_) =>
+            new_inside_expression,
+
         _ => Expression::Parentheses{
             contained: contained.clone(),
-            expression: Box::new(new_inside_expression),
+            expression: Box::new(new_inside_expression)
         }
     }
 }
@@ -342,6 +348,13 @@ fn simplify_binary_operator(left_expression : &Expression, binop: &BinOp, right_
     }
 }
 
+fn simplify_anonymous_function(anonymous_function: &AnonymousFunction) -> Expression
+{
+    let new_body = simplify_function_body(anonymous_function.body());
+    Expression::Function(
+        Box::new(anonymous_function.clone().with_body(new_body)))
+}
+
 fn simplify_expression(expression: &Expression) -> Expression
 {
     match expression
@@ -357,6 +370,9 @@ fn simplify_expression(expression: &Expression) -> Expression
 
         Expression::BinaryOperator{lhs, binop, rhs} =>
             return simplify_binary_operator(&lhs, &binop, &rhs),
+
+        Expression::Function(anonymous_function_box) =>
+            return simplify_anonymous_function(&*anonymous_function_box),
 
         _ => {},
     }
@@ -988,7 +1004,7 @@ return jeff
     fn expression_in_back_of_method_call() {
         input_output(
             "local x = (true and obj):foo()\n",
-            "local x = (obj):foo()\n");
+            "local x = obj:foo()\n");
     }
 
     #[test]
@@ -1187,6 +1203,15 @@ end\n",
     }
 
     #[test]
+    fn anonymous_function_continues_into_body()
+    {
+        input_output(
+            "print(function() print(true ~= false) end)",
+            "print(function()\n\tprint(true)\nend)\n"
+        )
+    }
+
+    #[test]
     fn just_function_call_continues_into_argument()
     {
         input_output(
@@ -1255,6 +1280,15 @@ end\n",
         input_output(
             "do library.func(true == true) end",
             "do\n\tlibrary.func(true)\nend\n",
+        )
+    }
+
+    #[test]
+    fn function_call_continues_into_name()
+    {
+        input_output(
+            "print((false or foo)())",
+            "print(foo())\n",
         )
     }
 }
