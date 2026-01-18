@@ -513,8 +513,9 @@ fn simplify_while_statement(while_statement: &While) -> Vec<Stmt>
 {
     vec![
         Stmt::While(
-            while_statement.clone().with_condition(
-                simplify_expression(while_statement.condition()))
+            while_statement.clone()
+                .with_condition(simplify_expression(while_statement.condition()))
+                .with_block(simplify_block(while_statement.block()))
         )
     ]
 }
@@ -955,6 +956,15 @@ end\n",
         input_output(
             "while true or true do end",
             "while true do\nend\n"
+        )
+    }
+
+    #[test]
+    fn while_loop_continues_into_body()
+    {
+        input_output(
+            "while true do local x = false or false end",
+            "while true do\n\tlocal x = false\nend\n",
         )
     }
 }
