@@ -15,6 +15,7 @@ use full_moon::ast::LocalAssignment;
 use full_moon::ast::If;
 use full_moon::ast::ElseIf;
 use full_moon::ast::Do;
+use full_moon::ast::While;
 use full_moon::ast::Stmt;
 use full_moon::ast::Block;
 use full_moon::ast::UnOp;
@@ -508,6 +509,16 @@ fn simplify_if_statement(if_statement: &If) -> Vec<Stmt>
     clauses_to_statements(clauses)
 }
 
+fn simplify_while_statement(while_statement: &While) -> Vec<Stmt>
+{
+    vec![
+        Stmt::While(
+            while_statement.clone().with_condition(
+                simplify_expression(while_statement.condition()))
+        )
+    ]
+}
+
 fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
 {
     match statement
@@ -517,6 +528,9 @@ fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
 
         Stmt::If(if_statement) =>
             simplify_if_statement(&if_statement),
+
+        Stmt::While(while_statement) =>
+            simplify_while_statement(&while_statement),
 
         _ => vec![statement.clone()],
     }
@@ -935,4 +949,12 @@ end\n",
 "do\n\tbar1()\nend\n")
     }
 
+    #[test]
+    fn while_loop_continues_into_condition()
+    {
+        input_output(
+            "while true or true do end",
+            "while true do\nend\n"
+        )
+    }
 }
