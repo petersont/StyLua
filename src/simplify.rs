@@ -1,6 +1,5 @@
 use full_moon::ast::Ast;
 use full_moon::ast::punctuated::Punctuated;
-use full_moon::ast::punctuated::Pair;
 use full_moon::ast::BinOp::Or;
 use full_moon::ast::BinOp::And;
 use full_moon::ast::UnOp::Not;
@@ -135,7 +134,7 @@ fn simplify_unary_operator(unop: &UnOp, expression: &Expression) -> Expression
 
                     match token_reference.token().token_type()
                     {
-                        full_moon::tokenizer::TokenType::Symbol{ symbol } =>
+                        Symbol{ symbol } =>
                         {
                             match symbol
                             {
@@ -183,7 +182,7 @@ fn simplify_binary_operator(left_expression : &Expression, binop: &BinOp, right_
                 {
                     match token_reference.token().token_type()
                     {
-                        full_moon::tokenizer::TokenType::Symbol{ symbol } =>
+                        Symbol{ symbol } =>
                         {
                             match symbol
                             {
@@ -209,7 +208,7 @@ fn simplify_binary_operator(left_expression : &Expression, binop: &BinOp, right_
                 {
                     match token_reference.token().token_type()
                     {
-                        full_moon::tokenizer::TokenType::Symbol{ symbol } =>
+                        Symbol{ symbol } =>
                         {
                             match symbol
                             {
@@ -238,7 +237,7 @@ fn simplify_binary_operator(left_expression : &Expression, binop: &BinOp, right_
                 {
                     match token_reference.token().token_type()
                     {
-                        full_moon::tokenizer::TokenType::Symbol{ symbol } =>
+                        Symbol{ symbol } =>
                         {
                             match symbol
                             {
@@ -263,7 +262,7 @@ fn simplify_binary_operator(left_expression : &Expression, binop: &BinOp, right_
                 {
                     match token_reference.token().token_type()
                     {
-                        full_moon::tokenizer::TokenType::Symbol{ symbol } =>
+                        Symbol{ symbol } =>
                         {
                             match symbol
                             {
@@ -334,15 +333,15 @@ fn simplify_local_assignment(local_assignment: &LocalAssignment) -> Vec<Stmt>
     ))]
 }
 
-fn is_just_true(new_condition: &Expression) -> bool
+fn is_just_true(expression: &Expression) -> bool
 {
-    match new_condition
+    match expression
     {
         Expression::Symbol(ref token_reference) =>
         {
             match token_reference.token().token_type()
             {
-                full_moon::tokenizer::TokenType::Symbol{ symbol } =>
+                Symbol{ symbol } =>
                 {
                     match symbol
                     {
@@ -357,15 +356,15 @@ fn is_just_true(new_condition: &Expression) -> bool
     }
 }
 
-fn is_just_false(new_condition: &Expression) -> bool
+fn is_just_false(expression: &Expression) -> bool
 {
-    match new_condition
+    match expression
     {
         Expression::Symbol(ref token_reference) =>
         {
             match token_reference.token().token_type()
             {
-                full_moon::tokenizer::TokenType::Symbol{ symbol } =>
+                Symbol{ symbol } =>
                 {
                     match symbol
                     {
