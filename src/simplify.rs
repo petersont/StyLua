@@ -18,6 +18,7 @@ use full_moon::ast::Do;
 use full_moon::ast::While;
 use full_moon::ast::FunctionDeclaration;
 use full_moon::ast::LocalFunction;
+use full_moon::ast::NumericFor;
 use full_moon::ast::FunctionBody;
 use full_moon::ast::Stmt;
 use full_moon::ast::Block;
@@ -76,6 +77,7 @@ fn simplify_prefix(prefix: &Prefix) -> Prefix
 
 fn simplify_suffix(suffix: &Suffix) -> Suffix
 {
+    println!("suffix = {}", suffix);
     match suffix
     {
         Suffix::Call(call) =>
@@ -553,6 +555,23 @@ fn simplify_local_function(local_function: &LocalFunction) -> Vec<Stmt>
     ]
 }
 
+fn simplify_numeric_for(numeric_for: &NumericFor) -> Vec<Stmt>
+{
+    println!("Hey we're here numeric_for={}", numeric_for.to_string());
+
+    let new_start = simplify_expression(numeric_for.start());
+    let new_end = simplify_expression(numeric_for.end());
+    let new_block = simplify_block(numeric_for.block());
+
+    vec![
+        Stmt::NumericFor(numeric_for.clone()
+            .with_start(new_start)
+            .with_end(new_end)
+            .with_block(new_block)
+        )
+    ]
+}
+
 fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
 {
     match statement
@@ -566,11 +585,17 @@ fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
         Stmt::While(while_loop) =>
             simplify_while_loop(&while_loop),
 
+        Stmt::FunctionCall(function_call) =>
+            vec![Stmt::FunctionCall(simplify_function_call(&function_call))],
+
         Stmt::FunctionDeclaration(function_declaration) =>
             simplify_function_declaration(&function_declaration),
 
         Stmt::LocalFunction(local_function) =>
             simplify_local_function(&local_function),
+
+        Stmt::NumericFor(numeric_for) =>
+            simplify_numeric_for(&numeric_for),
 
         _ => vec![statement.clone()],
     }
@@ -1022,6 +1047,24 @@ end\n",
         input_output(
             "local function foo() local x = true and true end",
             "local function foo()\n\tlocal x = true\nend\n",
+        )
+    }
+
+    #[test]
+    fn just_function_call_continues_into_argument()
+    {
+        input_output(
+            "print(true and true)",
+            "print(true)\n"
+        )
+    }
+
+    #[test]
+    fn numeric_for_loop_continues_into_body()
+    {
+        input_output(
+            "for i=1, 5 do foo(false and true) end",
+            "for i = 1, 5 do\n\tfoo(false)\nend\n",
         )
     }
 }
