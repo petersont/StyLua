@@ -14,6 +14,7 @@ use full_moon::ast::Call;
 use full_moon::ast::FunctionArgs;
 use full_moon::ast::LocalAssignment;
 use full_moon::ast::If;
+use full_moon::ast::ElseIf;
 use full_moon::ast::Do;
 use full_moon::ast::Stmt;
 use full_moon::ast::Block;
@@ -362,45 +363,141 @@ fn is_just_true(new_condition: &Expression) -> bool
     }
 }
 
+fn is_just_false(new_condition: &Expression) -> bool
+{
+    match new_condition
+    {
+        full_moon::ast::Expression::Symbol(ref token_reference) =>
+        {
+            match token_reference.token().token_type()
+            {
+                full_moon::tokenizer::TokenType::Symbol{ symbol } =>
+                {
+                    match symbol
+                    {
+                        False => return true,
+                        _ => false,
+                    }
+                },
+                _ => false,
+            }
+        },
+        _ => false,
+    }
+}
+
+enum Predicate
+{
+    True,
+    Expression(Expression),
+}
+
+struct Clause
+{
+    predicate: Predicate,
+    block: Block,
+}
+
+fn clauses_to_statements(mut clauses: Vec<Clause>) -> Vec<Stmt>
+{
+    let mut citer = clauses.drain(..);
+    let first = match citer.next()
+    {
+        None => return vec![],
+        Some(first) => first,
+    };
+
+    let mut new_if = match first.predicate
+    {
+        Predicate::True =>
+            return vec![Stmt::Do(Do::new().with_block(first.block))],
+
+        Predicate::Expression(expression) =>
+            If::new(expression).with_block(first.block),
+    };
+
+    let mut new_elseifs = Vec::new();
+    for clause in citer
+    {
+        match clause.predicate
+        {
+            Predicate::True =>
+            {
+                if new_elseifs.len() > 0
+                {
+                    new_if = new_if.with_else_if(Some(new_elseifs));
+                }
+                return vec![Stmt::If(new_if
+                    .with_else_token(Some(TokenReference::symbol("else").unwrap()))
+                    .with_else(Some(clause.block)))];
+            },
+
+            Predicate::Expression(expression) =>
+            {
+                new_elseifs.push(ElseIf::new(expression).with_block(clause.block))
+            },
+        }
+    }
+
+    if new_elseifs.len() > 0
+    {
+        new_if = new_if.with_else_if(Some(new_elseifs));
+    }
+
+    vec![Stmt::If(new_if)]
+}
+
+fn to_predicate(expression: Expression) -> Predicate
+{
+    if is_just_true(&expression)
+    {
+        return Predicate::True;
+    }
+
+    return Predicate::Expression(expression);
+}
+
 fn simplify_if_statement(if_statement: &If) -> Vec<Stmt>
 {
+    let mut clauses = vec![];
+
     let new_condition = simplify_expression(if_statement.condition().clone());
     let new_block = simplify_block(if_statement.block());
 
-    if is_just_true(&new_condition)
+    if ! is_just_false(&new_condition)
     {
-        return vec![Stmt::Do(Do::new().with_block(new_block))];
+        clauses.push(Clause{
+            predicate: to_predicate(new_condition),
+            block: new_block
+        });
     }
-
-    let mut new_if_statement = If::new(new_condition).with_block(new_block);
 
     if let Some(elseifs) = if_statement.else_if()
     {
-        let mut new_elseifs = Vec::new();
         for else_if_clause in elseifs
         {
-            let new_clause_condition = simplify_expression(else_if_clause.condition().clone());
-            let new_clause_block = simplify_block(else_if_clause.block());
+            let new_condition = simplify_expression(else_if_clause.condition().clone());
 
-            if is_just_true(&new_clause_condition)
+            if ! is_just_false(&new_condition)
             {
-                return vec![Stmt::If(new_if_statement
-                    .with_else_token(Some(TokenReference::symbol("else").unwrap()))
-                    .with_else(Some(new_clause_block)))];
+                let new_block = simplify_block(else_if_clause.block());
+                clauses.push(Clause{
+                    predicate: to_predicate(new_condition),
+                    block: new_block
+                });
             }
-            new_elseifs.push(else_if_clause.clone())
         }
-        new_if_statement = new_if_statement.with_else_if(Some(new_elseifs));
     }
 
     if let Some(else_block) = if_statement.else_block()
     {
-        new_if_statement = new_if_statement
-            .with_else_token(Some(TokenReference::symbol("else").unwrap()))
-            .with_else(Some(simplify_block(else_block)));
+        clauses.push(Clause{
+            predicate: Predicate::True,
+            block: simplify_block(&else_block)
+        });
     }
 
-    vec![Stmt::If(new_if_statement)]
+    clauses_to_statements(clauses)
 }
 
 fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
@@ -412,7 +509,7 @@ fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
 
         Stmt::If(if_statement) =>
             simplify_if_statement(&if_statement),
-        
+
         _ => vec![statement.clone()],
     }
 }
@@ -653,6 +750,28 @@ end",
     }
 
     #[test]
+    fn elseif_block_continues_to_simplify() {
+        input_output("\
+if first then
+    foo()
+elseif second then
+    local x = true and true
+end",
+            "if first then\n\tfoo()\nelseif second then\n\tlocal x = true\nend\n")
+    }
+
+    #[test]
+    fn else_block_continues_to_simplify() {
+        input_output("\
+if first then
+    foo()
+else
+    local x = true and true
+end",
+            "if first then\n\tfoo()\nelse\n\tlocal x = true\nend\n")
+    }
+
+    #[test]
     fn bool_true_expression_in_if_statement() {
         input_output(
             "if true and true then foo() else bar() end\n",
@@ -714,5 +833,62 @@ if first then
 else
 \tbar1()
 end\n")
+    }
+
+    #[test]
+    fn first_condition_is_false() {
+        input_output(
+"\
+if false then
+    foo()
+elseif something then
+    bar1()
+elseif something then
+    bar2()
+end",
+
+"\
+if something then
+\tbar1()
+elseif something then
+\tbar2()
+end\n")
+    }
+
+    #[test]
+    fn just_if_false() {
+        input_output(
+"\
+local x = 1
+if false then
+    foo()
+end",
+
+"local x = 1\n")
+    }
+
+    #[test]
+    fn just_if_false_else() {
+        input_output(
+            "if false then foo() else bar() end",
+            "do\n\tbar()\nend\n"
+        )
+    }
+
+    #[test]
+    fn if_false_else_if_true() {
+        input_output(
+"\
+if false then
+\tfoo()
+elseif true then
+\tbar1()
+elseif third then
+\tbar2()
+else
+\tbar3()
+end\n",
+
+"do\n\tbar1()\nend\n")
     }
 }
