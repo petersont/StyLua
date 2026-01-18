@@ -77,7 +77,6 @@ fn simplify_prefix(prefix: &Prefix) -> Prefix
 
 fn simplify_suffix(suffix: &Suffix) -> Suffix
 {
-    println!("suffix = {}", suffix);
     match suffix
     {
         Suffix::Call(call) =>
@@ -316,32 +315,14 @@ fn simplify_expression(expression: &Expression) -> Expression
     expression.clone()
 }
 
-fn replace_expressions(
-    punctuated_expressions: Punctuated<Expression>,
-    expressions: Vec<Expression>) -> Punctuated<Expression>
-{
-    let mut new_expressions = Punctuated::new();
-
-    for (pair, expression) in punctuated_expressions.pairs().zip(expressions)
-    {
-        match pair.punctuation()
-        {
-            Some(punctuation) =>
-                new_expressions.push_punctuated(expression, punctuation.clone()),
-
-            None =>
-                new_expressions.push(Pair::End(expression)),
-        }
-    }
-
-    new_expressions
-}
-
 fn simplify_punctuated_expressions(punctuated_expressions :&Punctuated<Expression>) -> Punctuated<Expression>
 {
-    replace_expressions(punctuated_expressions.clone(),
-        punctuated_expressions.iter().map(
-        |expression| simplify_expression(expression)).collect())
+    let mut new_punctuated_expressions = punctuated_expressions.clone();
+    for pair in new_punctuated_expressions.pairs_mut()
+    {
+        *pair.value_mut() = simplify_expression(&pair.value());
+    }
+    new_punctuated_expressions
 }
 
 fn simplify_local_assignment(local_assignment: &LocalAssignment) -> Vec<Stmt>
@@ -1056,6 +1037,15 @@ end\n",
         input_output(
             "print(true and true)",
             "print(true)\n"
+        )
+    }
+
+    #[test]
+    fn just_function_call_continues_into_arguments()
+    {
+        input_output(
+            "print(true and true, false or false)",
+            "print(true, false)\n"
         )
     }
 
