@@ -92,13 +92,11 @@ fn simplify_suffix(suffix: &Suffix) -> Suffix
     }
 }
 
-fn simplify_function_call(function_call: FunctionCall) -> FunctionCall
+fn simplify_function_call(function_call: &FunctionCall) -> FunctionCall
 {
     let prefix = simplify_prefix(function_call.prefix());
-
     let suffixes = function_call.suffixes().map(|suffix| simplify_suffix(suffix)).collect();
-
-    function_call.with_prefix(prefix).with_suffixes(suffixes)
+    function_call.clone().with_prefix(prefix).with_suffixes(suffixes)
 }
 
 fn simplify_expression(expression: Expression) -> Expression
@@ -106,7 +104,7 @@ fn simplify_expression(expression: Expression) -> Expression
     match expression
     {
         Expression::FunctionCall(function_call) =>
-            return Expression::FunctionCall(simplify_function_call(function_call)),
+            return Expression::FunctionCall(simplify_function_call(&function_call)),
 
         full_moon::ast::Expression::Parentheses{ref contained, ref expression} =>
         {
@@ -477,15 +475,16 @@ fn simplify_if_statement(if_statement: &If) -> Vec<Stmt>
         for else_if_clause in elseifs
         {
             let new_condition = simplify_expression(else_if_clause.condition().clone());
-
-            if ! is_just_false(&new_condition)
+            if is_just_false(&new_condition)
             {
-                let new_block = simplify_block(else_if_clause.block());
-                clauses.push(Clause{
-                    predicate: to_predicate(new_condition),
-                    block: new_block
-                });
+                continue;
             }
+
+            let new_block = simplify_block(else_if_clause.block());
+            clauses.push(Clause{
+                predicate: to_predicate(new_condition),
+                block: new_block
+            });
         }
     }
 
@@ -891,4 +890,5 @@ end\n",
 
 "do\n\tbar1()\nend\n")
     }
+
 }
