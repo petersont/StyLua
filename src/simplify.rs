@@ -581,6 +581,18 @@ fn simplify_repeat(repeat: &Repeat) -> Vec<Stmt>
     ]
 }
 
+fn simplify_do(do_block: &Do) -> Vec<Stmt>
+{
+    let new_block = simplify_block(do_block.block());
+
+    vec![
+        Stmt::Do(
+            do_block.clone()
+                .with_block(new_block)
+        )
+    ]
+}
+
 fn simplify_function_body(function_body: &FunctionBody) -> FunctionBody
 {
     let new_block = simplify_block(function_body.block());
@@ -653,6 +665,9 @@ fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
 
         Stmt::Repeat(repeat) =>
             simplify_repeat(&repeat),
+
+        Stmt::Do(do_block) =>
+            simplify_do(&do_block),
 
         _ => vec![statement.clone()],
     }
@@ -1231,6 +1246,15 @@ end\n",
         input_output(
             "repeat line = io.read() until true or true",
             "repeat\n\tline = io.read()\nuntil true\n",
+        )
+    }
+
+    #[test]
+    fn do_continues_into_body()
+    {
+        input_output(
+            "do library.func(true == true) end",
+            "do\n\tlibrary.func(true)\nend\n",
         )
     }
 }
