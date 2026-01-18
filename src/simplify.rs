@@ -2,6 +2,8 @@ use full_moon::ast::Ast;
 use full_moon::ast::punctuated::Punctuated;
 use full_moon::ast::BinOp::Or;
 use full_moon::ast::BinOp::And;
+use full_moon::ast::BinOp::TwoEqual;
+use full_moon::ast::BinOp::TildeEqual;
 use full_moon::ast::UnOp::Not;
 use full_moon::ast::FunctionCall;
 
@@ -11,6 +13,7 @@ use full_moon::ast::Suffix;
 use full_moon::ast::Call;
 use full_moon::ast::FunctionArgs;
 use full_moon::ast::LocalAssignment;
+use full_moon::ast::Assignment;
 use full_moon::ast::If;
 use full_moon::ast::ElseIf;
 use full_moon::ast::Do;
@@ -18,6 +21,7 @@ use full_moon::ast::While;
 use full_moon::ast::FunctionDeclaration;
 use full_moon::ast::LocalFunction;
 use full_moon::ast::NumericFor;
+use full_moon::ast::Repeat;
 use full_moon::ast::FunctionBody;
 use full_moon::ast::Stmt;
 use full_moon::ast::Block;
@@ -282,6 +286,52 @@ fn simplify_binary_operator(left_expression : &Expression, binop: &BinOp, right_
             }
         },
 
+        TwoEqual(_) =>
+        {
+            if (is_just_true(left_expression) && is_just_true(right_expression)) ||
+                (is_just_false(left_expression) && is_just_false(right_expression))
+            {
+                return Expression::Symbol(TokenReference::new(
+                    vec![],
+                    Token::new(Symbol{symbol:True}),
+                    vec![],
+                ));
+            }
+
+            if (is_just_true(left_expression) && is_just_false(right_expression)) ||
+                (is_just_false(left_expression) && is_just_true(right_expression))
+            {
+                return Expression::Symbol(TokenReference::new(
+                    vec![],
+                    Token::new(Symbol{symbol:False}),
+                    vec![],
+                ));
+            }
+        },
+
+        TildeEqual(_) =>
+        {
+            if (is_just_true(left_expression) && is_just_true(right_expression)) ||
+                (is_just_false(left_expression) && is_just_false(right_expression))
+            {
+                return Expression::Symbol(TokenReference::new(
+                    vec![],
+                    Token::new(Symbol{symbol:False}),
+                    vec![],
+                ));
+            }
+
+            if (is_just_true(left_expression) && is_just_false(right_expression)) ||
+                (is_just_false(left_expression) && is_just_true(right_expression))
+            {
+                return Expression::Symbol(TokenReference::new(
+                    vec![],
+                    Token::new(Symbol{symbol:True}),
+                    vec![],
+                ));
+            }
+        }
+
         _ => {},
     }
 
@@ -330,6 +380,15 @@ fn simplify_local_assignment(local_assignment: &LocalAssignment) -> Vec<Stmt>
         Stmt::LocalAssignment(
             local_assignment.clone().with_expressions(
                 simplify_punctuated_expressions(local_assignment.expressions())
+    ))]
+}
+
+fn simplify_assignment(assignment: &Assignment) -> Vec<Stmt>
+{
+    vec![
+        Stmt::Assignment(
+            assignment.clone().with_expressions(
+                simplify_punctuated_expressions(assignment.expressions())
     ))]
 }
 
@@ -508,6 +567,20 @@ fn simplify_while_loop(while_loop: &While) -> Vec<Stmt>
     ]
 }
 
+fn simplify_repeat(repeat: &Repeat) -> Vec<Stmt>
+{
+    let new_block = simplify_block(repeat.block());
+    let new_until = simplify_expression(repeat.until());
+
+    vec![
+        Stmt::Repeat(
+            repeat.clone()
+                .with_block(new_block)
+                .with_until(new_until)
+        )
+    ]
+}
+
 fn simplify_function_body(function_body: &FunctionBody) -> FunctionBody
 {
     let new_block = simplify_block(function_body.block());
@@ -537,8 +610,6 @@ fn simplify_local_function(local_function: &LocalFunction) -> Vec<Stmt>
 
 fn simplify_numeric_for(numeric_for: &NumericFor) -> Vec<Stmt>
 {
-    println!("Hey we're here numeric_for={}", numeric_for.to_string());
-
     let new_start = simplify_expression(numeric_for.start());
     let new_end = simplify_expression(numeric_for.end());
     let new_block = simplify_block(numeric_for.block());
@@ -559,6 +630,9 @@ fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
         Stmt::LocalAssignment(local_assignment) =>
             simplify_local_assignment(&local_assignment),
 
+        Stmt::Assignment(assignment) =>
+            simplify_assignment(&assignment),
+
         Stmt::If(if_statement) =>
             simplify_if_statement(&if_statement),
 
@@ -576,6 +650,9 @@ fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
 
         Stmt::NumericFor(numeric_for) =>
             simplify_numeric_for(&numeric_for),
+
+        Stmt::Repeat(repeat) =>
+            simplify_repeat(&repeat),
 
         _ => vec![statement.clone()],
     }
@@ -735,6 +812,70 @@ return jeff
         input_output(
             "local x = durian and true and true\n",
             "local x = durian\n");
+    }
+
+    #[test]
+    fn print_bool_expression_equals_bool_true_true() {
+        input_output(
+            "print(true == true)\n",
+            "print(true)\n"
+        )
+    }
+
+    #[test]
+    fn print_bool_expression_equals_bool_false_false() {
+        input_output(
+            "print(false == false)\n",
+            "print(true)\n"
+        )
+    }
+
+    #[test]
+    fn print_bool_expression_equals_bool_true_false() {
+        input_output(
+            "print(true == false)\n",
+            "print(false)\n"
+        )
+    }
+
+    #[test]
+    fn print_bool_expression_equals_bool_false_true() {
+        input_output(
+            "print(false == true)\n",
+            "print(false)\n"
+        )
+    }
+
+    #[test]
+    fn print_bool_expression_not_equals_bool_true_true() {
+        input_output(
+            "print(true ~= true)\n",
+            "print(false)\n"
+        )
+    }
+
+    #[test]
+    fn print_bool_expression_not_equals_bool_false_false() {
+        input_output(
+            "print(false ~= false)\n",
+            "print(false)\n"
+        )
+    }
+
+    #[test]
+    fn print_bool_expression_not_equals_bool_true_false() {
+        input_output(
+            "print(true ~= false)\n",
+            "print(true)\n"
+        )
+    }
+
+    #[test]
+    fn print_bool_expression_not_equals_bool_false_true() {
+        input_output(
+            "print(false ~= true)\n",
+            "print(true)\n"
+        )
     }
 
     #[test]
@@ -1054,6 +1195,42 @@ end\n",
         input_output(
             "for i=1, 5 do foo(false and true) end",
             "for i = 1, 5 do\n\tfoo(false)\nend\n",
+        )
+    }
+
+    #[test]
+    fn numeric_for_loop_continues_into_start()
+    {
+        input_output(
+            "for i=(true and 1), 5 do foo(false and true) end",
+            "for i = 1, 5 do\n\tfoo(false)\nend\n",
+        )
+    }
+
+    #[test]
+    fn numeric_for_loop_continues_into_end()
+    {
+        input_output(
+            "for i=1, (true and 5) do foo(false and true) end",
+            "for i = 1, 5 do\n\tfoo(false)\nend\n",
+        )
+    }
+
+    #[test]
+    fn repeat_continues_into_body()
+    {
+        input_output(
+            "repeat line = foo(false and true) until line ~= \"\"",
+            "repeat\n\tline = foo(false)\nuntil line ~= \"\"\n",
+        )
+    }
+
+    #[test]
+    fn repeat_continues_into_until()
+    {
+        input_output(
+            "repeat line = io.read() until true or true",
+            "repeat\n\tline = io.read()\nuntil true\n",
         )
     }
 }
