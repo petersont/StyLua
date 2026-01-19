@@ -31,6 +31,8 @@ use full_moon::ast::UnOp;
 use full_moon::ast::BinOp;
 use full_moon::ast::Field;
 use full_moon::ast::TableConstructor;
+use full_moon::ast::Var;
+use full_moon::ast::VarExpression;
 use full_moon::ast::span::ContainedSpan;
 
 use full_moon::tokenizer::TokenReference;
@@ -398,6 +400,33 @@ fn simplify_table_constructor(table_constructor: &TableConstructor) -> TableCons
     table_constructor.clone().with_fields(new_fields)
 }
 
+fn simplify_suffixes<'a>(suffixes: impl Iterator<Item = &'a Suffix>) -> Vec<Suffix>
+{
+    suffixes.map(simplify_suffix).collect()
+}
+
+fn simplify_var_expression(var_expression: &VarExpression) -> VarExpression
+{
+    let new_prefix = simplify_prefix(var_expression.prefix());
+    let new_suffixes = simplify_suffixes(var_expression.suffixes());
+
+    var_expression.clone()
+        .with_prefix(new_prefix)
+        .with_suffixes(new_suffixes)
+}
+
+fn simplify_var(var: &Var) -> Var
+{
+    match var
+    {
+        Var::Expression(var_expression_box) =>
+            Var::Expression(Box::new(simplify_var_expression(&*var_expression_box))),
+        Var::Name(_) =>
+            var.clone(),
+        &_ => todo!(),
+    }
+}
+
 fn simplify_expression(expression: &Expression) -> Expression
 {
     match expression
@@ -419,6 +448,9 @@ fn simplify_expression(expression: &Expression) -> Expression
 
         Expression::TableConstructor(table_constructor) =>
             Expression::TableConstructor(simplify_table_constructor(table_constructor)),
+
+        Expression::Var(var) =>
+            Expression::Var(simplify_var(var)),
 
         _ => expression.clone(),
     }
@@ -1409,6 +1441,15 @@ end\n",
         input_output(
             "print(foo{true or true})",
             "print(foo({ true }))\n",
+        )
+    }
+
+    #[test]
+    fn var_continues()
+    {
+        input_output(
+            "print((true and y).z)",
+            "print(y.z)\n"
         )
     }
 }
