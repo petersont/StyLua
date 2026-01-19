@@ -434,22 +434,16 @@ fn simplify_punctuated_expressions(punctuated_expressions :&Punctuated<Expressio
     new_punctuated_expressions
 }
 
-fn simplify_local_assignment(local_assignment: &LocalAssignment) -> Vec<Stmt>
+fn simplify_local_assignment(local_assignment: &LocalAssignment) -> LocalAssignment
 {
-    vec![
-        Stmt::LocalAssignment(
-            local_assignment.clone().with_expressions(
-                simplify_punctuated_expressions(local_assignment.expressions())
-    ))]
+    local_assignment.clone().with_expressions(
+        simplify_punctuated_expressions(local_assignment.expressions()))
 }
 
-fn simplify_assignment(assignment: &Assignment) -> Vec<Stmt>
+fn simplify_assignment(assignment: &Assignment) -> Assignment
 {
-    vec![
-        Stmt::Assignment(
-            assignment.clone().with_expressions(
-                simplify_punctuated_expressions(assignment.expressions())
-    ))]
+    assignment.clone().with_expressions(
+        simplify_punctuated_expressions(assignment.expressions()))
 }
 
 fn is_just_true(expression: &Expression) -> bool
@@ -611,44 +605,30 @@ fn simplify_if_statement(if_statement: &If) -> Vec<Stmt>
     clauses_to_statements(clauses)
 }
 
-fn simplify_while_loop(while_loop: &While) -> Vec<Stmt>
+fn simplify_while_loop(while_loop: &While) -> While
 {
     let new_condition = simplify_expression(while_loop.condition());
     let new_block = simplify_block(while_loop.block());
-
-    vec![
-        Stmt::While(
-            while_loop.clone()
-                .with_condition(new_condition)
-                .with_block(new_block)
-        )
-    ]
+    while_loop.clone()
+        .with_condition(new_condition)
+        .with_block(new_block)
 }
 
-fn simplify_repeat(repeat: &Repeat) -> Vec<Stmt>
+fn simplify_repeat(repeat: &Repeat) -> Repeat
 {
     let new_block = simplify_block(repeat.block());
     let new_until = simplify_expression(repeat.until());
 
-    vec![
-        Stmt::Repeat(
-            repeat.clone()
-                .with_block(new_block)
-                .with_until(new_until)
-        )
-    ]
+    repeat.clone()
+        .with_block(new_block)
+        .with_until(new_until)
 }
 
-fn simplify_do(do_block: &Do) -> Vec<Stmt>
+fn simplify_do(do_block: &Do) -> Do
 {
     let new_block = simplify_block(do_block.block());
-
-    vec![
-        Stmt::Do(
-            do_block.clone()
-                .with_block(new_block)
-        )
-    ]
+    do_block.clone()
+        .with_block(new_block)
 }
 
 fn simplify_function_body(function_body: &FunctionBody) -> FunctionBody
@@ -657,94 +637,79 @@ fn simplify_function_body(function_body: &FunctionBody) -> FunctionBody
     function_body.clone().with_block(new_block)
 }
 
-fn simplify_function_declaration(function_declaration: &FunctionDeclaration) -> Vec<Stmt>
+fn simplify_function_declaration(function_declaration: &FunctionDeclaration) -> FunctionDeclaration
 {
     let new_body = simplify_function_body(function_declaration.body());
-    vec![
-        Stmt::FunctionDeclaration(
-            function_declaration.clone()
-                .with_body(new_body)
-        )
-    ]
+    function_declaration.clone().with_body(new_body)
 }
 
-fn simplify_local_function(local_function: &LocalFunction) -> Vec<Stmt>
+fn simplify_local_function(local_function: &LocalFunction) -> LocalFunction
 {
     let new_body = simplify_function_body(local_function.body());
-    vec![
-        Stmt::LocalFunction(
-            local_function.clone().with_body(new_body)
-        )
-    ]
+    local_function.clone().with_body(new_body)
 }
 
-fn simplify_numeric_for(numeric_for: &NumericFor) -> Vec<Stmt>
+fn simplify_numeric_for(numeric_for: &NumericFor) -> NumericFor
 {
     let new_start = simplify_expression(numeric_for.start());
     let new_end = simplify_expression(numeric_for.end());
     let new_block = simplify_block(numeric_for.block());
 
-    vec![
-        Stmt::NumericFor(numeric_for.clone()
-            .with_start(new_start)
-            .with_end(new_end)
-            .with_block(new_block)
-        )
-    ]
+    numeric_for.clone()
+        .with_start(new_start)
+        .with_end(new_end)
+        .with_block(new_block)
 }
 
-fn simplify_generic_for(generic_for: &GenericFor) -> Vec<Stmt>
+fn simplify_generic_for(generic_for: &GenericFor) -> GenericFor
 {
     let new_block = simplify_block(generic_for.block());
     let new_expressions = simplify_punctuated_expressions(generic_for.expressions());
 
-    vec![
-        Stmt::GenericFor(generic_for.clone()
-            .with_block(new_block)
-            .with_expressions(new_expressions)
-        )
-    ]
+    generic_for.clone()
+        .with_block(new_block)
+        .with_expressions(new_expressions)
 }
 
 fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
 {
-    match statement
+    vec![match statement
     {
         Stmt::LocalAssignment(local_assignment) =>
-            simplify_local_assignment(&local_assignment),
+            Stmt::LocalAssignment(simplify_local_assignment(&local_assignment)),
 
         Stmt::Assignment(assignment) =>
-            simplify_assignment(&assignment),
+            Stmt::Assignment(simplify_assignment(&assignment)),
 
         Stmt::If(if_statement) =>
-            simplify_if_statement(&if_statement),
+            return simplify_if_statement(&if_statement),
 
         Stmt::While(while_loop) =>
-            simplify_while_loop(&while_loop),
+            Stmt::While(simplify_while_loop(&while_loop)),
 
         Stmt::FunctionCall(function_call) =>
-            vec![Stmt::FunctionCall(simplify_function_call(&function_call))],
+            Stmt::FunctionCall(simplify_function_call(&function_call)),
 
         Stmt::FunctionDeclaration(function_declaration) =>
-            simplify_function_declaration(&function_declaration),
+            Stmt::FunctionDeclaration(simplify_function_declaration(&function_declaration)),
 
         Stmt::LocalFunction(local_function) =>
-            simplify_local_function(&local_function),
+            Stmt::LocalFunction(simplify_local_function(&local_function)),
 
         Stmt::NumericFor(numeric_for) =>
-            simplify_numeric_for(&numeric_for),
+            Stmt::NumericFor(simplify_numeric_for(&numeric_for)),
 
         Stmt::GenericFor(generic_for) =>
-            simplify_generic_for(&generic_for),
+            Stmt::GenericFor(simplify_generic_for(&generic_for)),
 
         Stmt::Repeat(repeat) =>
-            simplify_repeat(&repeat),
+            Stmt::Repeat(simplify_repeat(&repeat)),
 
         Stmt::Do(do_block) =>
-            simplify_do(&do_block),
+            Stmt::Do(simplify_do(&do_block)),
 
-        _ => vec![statement.clone()],
-    }
+        _ => statement.clone(),
+    }]
 }
 
 fn simplify_block(block: &Block) -> Block
