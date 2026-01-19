@@ -28,6 +28,8 @@ use full_moon::ast::Stmt;
 use full_moon::ast::Block;
 use full_moon::ast::UnOp;
 use full_moon::ast::BinOp;
+use full_moon::ast::Field;
+use full_moon::ast::TableConstructor;
 use full_moon::ast::span::ContainedSpan;
 
 use full_moon::tokenizer::TokenReference;
@@ -355,29 +357,69 @@ fn simplify_anonymous_function(anonymous_function: &AnonymousFunction) -> Expres
         Box::new(anonymous_function.clone().with_body(new_body)))
 }
 
+fn simplify_field(field: &Field) -> Field
+{
+    match field
+    {
+        Field::ExpressionKey { brackets, key, equal, value } => Field::ExpressionKey{
+            brackets: brackets.clone(),
+            key: simplify_expression(&key),
+            equal: equal.clone(),
+            value: simplify_expression(&value),
+        },
+
+        Field::NameKey { key, equal, value } => Field::NameKey{
+            key: key.clone(),
+            equal: equal.clone(),
+            value: simplify_expression(value),
+        },
+
+        Field::NoKey(expression) => Field::NoKey(simplify_expression(expression)),
+
+        &_ => todo!(),
+    }
+}
+
+fn simplify_punctuated_fields(punctuated_fields: &Punctuated<Field>) -> Punctuated<Field>
+{
+    let mut new_punctuated_fields = punctuated_fields.clone();
+    for pair in new_punctuated_fields.pairs_mut()
+    {
+        *pair.value_mut() = simplify_field(&pair.value());
+    }
+    new_punctuated_fields
+}
+
+fn simplify_table_constructor(table_constructor: &TableConstructor) -> TableConstructor
+{
+    let new_fields = simplify_punctuated_fields(table_constructor.fields());
+    table_constructor.clone().with_fields(new_fields)
+}
+
 fn simplify_expression(expression: &Expression) -> Expression
 {
     match expression
     {
         Expression::FunctionCall(function_call) =>
-            return Expression::FunctionCall(simplify_function_call(&function_call)),
+            Expression::FunctionCall(simplify_function_call(&function_call)),
 
         Expression::Parentheses{contained, expression} =>
-            return simplify_parentheses(&contained, &*expression),
+            simplify_parentheses(&contained, &*expression),
 
         Expression::UnaryOperator{unop, expression} =>
-            return simplify_unary_operator(&unop, &expression),
+            simplify_unary_operator(&unop, &expression),
 
         Expression::BinaryOperator{lhs, binop, rhs} =>
-            return simplify_binary_operator(&lhs, &binop, &rhs),
+            simplify_binary_operator(&lhs, &binop, &rhs),
 
         Expression::Function(anonymous_function_box) =>
-            return simplify_anonymous_function(&*anonymous_function_box),
+            simplify_anonymous_function(&*anonymous_function_box),
 
-        _ => {},
+        Expression::TableConstructor(table_constructor) =>
+            Expression::TableConstructor(simplify_table_constructor(table_constructor)),
+
+        _ => expression.clone(),
     }
-
-    expression.clone()
 }
 
 fn simplify_punctuated_expressions(punctuated_expressions :&Punctuated<Expression>) -> Punctuated<Expression>
@@ -1289,6 +1331,33 @@ end\n",
         input_output(
             "print((false or foo)())",
             "print(foo())\n",
+        )
+    }
+
+    #[test]
+    fn table_continues_into_value_with_expression_key()
+    {
+        input_output(
+            "print({[2] = true or true})",
+            "print({ [2] = true })\n",
+        )
+    }
+
+    #[test]
+    fn table_continues_into_value_with_token_key()
+    {
+        input_output(
+            "print({x = true or true})",
+            "print({ x = true })\n",
+        )
+    }
+
+    #[test]
+    fn table_continues_into_value_with_no_key()
+    {
+        input_output(
+            "print({true or true})",
+            "print({ true })\n",
         )
     }
 }
