@@ -22,6 +22,7 @@ use full_moon::ast::FunctionDeclaration;
 use full_moon::ast::LocalFunction;
 use full_moon::ast::AnonymousFunction;
 use full_moon::ast::NumericFor;
+use full_moon::ast::GenericFor;
 use full_moon::ast::Repeat;
 use full_moon::ast::FunctionBody;
 use full_moon::ast::Stmt;
@@ -692,6 +693,19 @@ fn simplify_numeric_for(numeric_for: &NumericFor) -> Vec<Stmt>
     ]
 }
 
+fn simplify_generic_for(generic_for: &GenericFor) -> Vec<Stmt>
+{
+    let new_block = simplify_block(generic_for.block());
+    let new_expressions = simplify_punctuated_expressions(generic_for.expressions());
+
+    vec![
+        Stmt::GenericFor(generic_for.clone()
+            .with_block(new_block)
+            .with_expressions(new_expressions)
+        )
+    ]
+}
+
 fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
 {
     match statement
@@ -719,6 +733,9 @@ fn simplify_statement(statement: &Stmt) -> Vec<Stmt>
 
         Stmt::NumericFor(numeric_for) =>
             simplify_numeric_for(&numeric_for),
+
+        Stmt::GenericFor(generic_for) =>
+            simplify_generic_for(&generic_for),
 
         Stmt::Repeat(repeat) =>
             simplify_repeat(&repeat),
@@ -1295,6 +1312,22 @@ end\n",
             "for i=1, (true and 5) do foo(false and true) end",
             "for i = 1, 5 do\n\tfoo(false)\nend\n",
         )
+    }
+
+    #[test]
+    fn generic_for_loop_continues_into_body()
+    {
+        input_output(
+            "for i, x in ipairs({}) do print(true or true) end",
+            "for i, x in ipairs({}) do\n\tprint(true)\nend\n")
+    }
+
+    #[test]
+    fn generic_for_loop_continues_into_list()
+    {
+        input_output(
+            "for i, x in ipairs({true and true}) do print(x) end",
+            "for i, x in ipairs({ true }) do\n\tprint(x)\nend\n")
     }
 
     #[test]
