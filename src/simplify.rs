@@ -48,7 +48,8 @@ fn simplify_function_args(function_args: &FunctionArgs) -> FunctionArgs
         },
 
         FunctionArgs::String(token_reference) => FunctionArgs::String(token_reference.clone()),
-        FunctionArgs::TableConstructor(table_constructor) => FunctionArgs::TableConstructor(table_constructor.clone()),
+        FunctionArgs::TableConstructor(table_constructor) => FunctionArgs::TableConstructor(
+            simplify_table_constructor(&table_constructor)),
         &_ => todo!(),
     }
 }
@@ -563,14 +564,12 @@ fn to_predicate(expression: Expression) -> Predicate
     {
         return Predicate::True;
     }
-
-    return Predicate::Expression(expression);
+    Predicate::Expression(expression)
 }
 
 fn simplify_if_statement(if_statement: &If) -> Vec<Stmt>
 {
     let mut clauses = vec![];
-
     let new_condition = simplify_expression(if_statement.condition());
     let new_block = simplify_block(if_statement.block());
 
@@ -1358,6 +1357,60 @@ end\n",
         input_output(
             "print({true or true})",
             "print({ true })\n",
+        )
+    }
+
+    #[test]
+    fn function_call_continues_into_value_with_expression_key()
+    {
+        input_output(
+            "foo{[2] = true or true}",
+            "foo({ [2] = true })\n",
+        )
+    }
+
+    #[test]
+    fn function_call_continues_into_value_with_token_key()
+    {
+        input_output(
+            "foo{x = true or true}",
+            "foo({ x = true })\n",
+        )
+    }
+
+    #[test]
+    fn function_call_continues_call_into_value_with_no_key()
+    {
+        input_output(
+            "foo{true or true}",
+            "foo({ true })\n",
+        )
+    }
+
+    #[test]
+    fn function_call_expression_continues_into_value_with_expression_key()
+    {
+        input_output(
+            "print(foo{[2] = true or true})",
+            "print(foo({ [2] = true }))\n",
+        )
+    }
+
+    #[test]
+    fn function_call_expression_continues_into_value_with_token_key()
+    {
+        input_output(
+            "print(foo{x = true or true})",
+            "print(foo({ x = true }))\n",
+        )
+    }
+
+    #[test]
+    fn function_call_expression_continues_call_into_value_with_no_key()
+    {
+        input_output(
+            "print(foo{true or true})",
+            "print(foo({ true }))\n",
         )
     }
 }
