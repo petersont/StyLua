@@ -14,6 +14,7 @@ pub mod editorconfig;
 mod formatters;
 mod shape;
 mod simplify;
+mod equivalent;
 mod sort_requires;
 mod verify_ast;
 
@@ -469,7 +470,7 @@ pub fn format_code(
 
     if config.functional_style_enabled
     {
-        input_ast = simplify::simplify_ast(input_ast);
+        input_ast = simplify::simplify_ast(&input_ast);
     }
 
     let ast = format_ast(input_ast, config, range, verify_output)?;

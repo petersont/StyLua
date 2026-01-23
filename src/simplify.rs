@@ -1,12 +1,10 @@
 use full_moon::ast::Ast;
-use full_moon::ast::punctuated::Punctuated;
 use full_moon::ast::BinOp::Or;
 use full_moon::ast::BinOp::And;
 use full_moon::ast::BinOp::TwoEqual;
 use full_moon::ast::BinOp::TildeEqual;
 use full_moon::ast::UnOp::Not;
 use full_moon::ast::FunctionCall;
-
 use full_moon::ast::Expression;
 use full_moon::ast::Prefix;
 use full_moon::ast::Suffix;
@@ -33,6 +31,8 @@ use full_moon::ast::Field;
 use full_moon::ast::TableConstructor;
 use full_moon::ast::Var;
 use full_moon::ast::VarExpression;
+
+use full_moon::ast::punctuated::Punctuated;
 use full_moon::ast::span::ContainedSpan;
 
 use full_moon::tokenizer::TokenReference;
@@ -656,10 +656,10 @@ fn simplify_repeat(repeat: &Repeat) -> Repeat
         .with_until(new_until)
 }
 
-fn simplify_do(do_block: &Do) -> Do
+fn simplify_do(do_obj: &Do) -> Do
 {
-    let new_block = simplify_block(do_block.block());
-    do_block.clone()
+    let new_block = simplify_block(do_obj.block());
+    do_obj.clone()
         .with_block(new_block)
 }
 
@@ -762,7 +762,7 @@ fn simplify_block(block: &Block) -> Block
     block.clone().with_stmts(new_stmts)
 }
 
-pub fn simplify_ast(input_ast: Ast) -> Ast
+pub fn simplify_ast(input_ast: &Ast) -> Ast
 {
     input_ast.clone().with_nodes(simplify_block(input_ast.nodes()))
 }
@@ -778,7 +778,7 @@ use crate::OutputVerification;
 
 fn simplify_code(code: &str) -> String {
     let config = Config::default();
-    format_ast(simplify_ast(parse_fallible(code, config.syntax.into()).into_result().unwrap()),
+    format_ast(simplify_ast(&parse_fallible(code, config.syntax.into()).into_result().unwrap()),
         config, None, OutputVerification::None).unwrap().to_string()
 }
 
