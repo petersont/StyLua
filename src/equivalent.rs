@@ -48,27 +48,27 @@ fn eq_function_args(a: &FunctionArgs, b: &FunctionArgs) -> bool
     match (a, b)
     {
         (
-            FunctionArgs::Parentheses {parentheses:_a_parentheses, arguments:_a_arguments},
-            FunctionArgs::Parentheses {parentheses:_b_parentheses, arguments:_b_arguments}
+            FunctionArgs::Parentheses {parentheses:_a_parentheses, arguments:a_arguments},
+            FunctionArgs::Parentheses {parentheses:_b_parentheses, arguments:b_arguments}
         ) => 
         {
-            // should fail some test some day
-            true
+            eq_punctuated_expressions(a_arguments, b_arguments)
         },
 
         (
             FunctionArgs::String(a_token_reference),
             FunctionArgs::String(b_token_reference)
         ) =>
-            a_token_reference == b_token_reference,
+        {
+            eq_token_reference(a_token_reference, b_token_reference)
+        },
 
         (
-            FunctionArgs::TableConstructor(_a_table_constructor),
-            FunctionArgs::TableConstructor(_b_table_constructor)
+            FunctionArgs::TableConstructor(a_table_constructor),
+            FunctionArgs::TableConstructor(b_table_constructor)
         ) =>
         {
-            // should fail some test some day
-            false
+            eq_table_constructor(a_table_constructor, b_table_constructor)
         },
 
         (&_, &_) => false,
@@ -132,8 +132,7 @@ fn eq_method_call(a: &MethodCall, b: &MethodCall) -> bool
 
 fn eq_suffix(a: &Suffix, b: &Suffix) -> bool
 {
-    println!("eq_suffix a b: {} {}", a.to_string(), b.to_string());
-
+    println!("eq_suffix: {} {}", a.to_string(), b.to_string());
     match (a, b)
     {
         (
@@ -141,6 +140,7 @@ fn eq_suffix(a: &Suffix, b: &Suffix) -> bool
             Suffix::Call(b_call)
         ) =>
         {
+            println!("Suffix::Call");
             match (a_call, b_call)
             {
                 (
@@ -148,6 +148,7 @@ fn eq_suffix(a: &Suffix, b: &Suffix) -> bool
                     Call::AnonymousCall(b_function_args)
                 ) => 
                 {
+                    println!("Suffix::Call / AnonymousCall");
                     eq_function_args(a_function_args, b_function_args)
                 },
 
@@ -156,6 +157,7 @@ fn eq_suffix(a: &Suffix, b: &Suffix) -> bool
                     Call::MethodCall(b_method_call)
                 ) =>
                 {
+                    println!("Suffix::Call / MethodCall");
                     eq_method_call(a_method_call, b_method_call)
                 },
 
@@ -181,12 +183,17 @@ fn eq_suffix(a: &Suffix, b: &Suffix) -> bool
             true
         },
 
-        (&_, &_) => false
+        (&_, &_) => 
+        {
+            println!("Somethign else???");
+            false
+        }
     }
 }
 
 fn eq_function_call(a: &FunctionCall, b: &FunctionCall) -> bool
 {
+    println!("eq_function_call");
     if !eq_prefix(a.prefix(), b.prefix())
     {
         println!("prefixes are not equal");
@@ -211,7 +218,6 @@ fn eq_function_call(a: &FunctionCall, b: &FunctionCall) -> bool
         }
     }
 
-    println!("what?  returning true?");
     return true;
 }
 
@@ -251,21 +257,19 @@ fn eq_field(a: &Field, b: &Field) -> bool
     match (a, b)
     {
         (
-            Field::ExpressionKey { brackets:_a_brackets, key:_a_key, equal:_a_equal, value:_a_value },
-            Field::ExpressionKey { brackets:_b_brackets, key:_b_key, equal:_b_equal, value:_b_value }
+            Field::ExpressionKey { brackets:_a_brackets, key:a_key, equal:_a_equal, value:a_value },
+            Field::ExpressionKey { brackets:_b_brackets, key:b_key, equal:_b_equal, value:b_value }
         ) =>
         {
-            // should fail a test
-            false
+            eq_expression(a_key, b_key) && eq_expression(a_value, b_value)
         },
 
         (
-            Field::NameKey { key:_a_key, equal:_a_equal, value:_a_value },
-            Field::NameKey { key:_b_key, equal:_b_equal, value:_b_value }
+            Field::NameKey { key:a_key, equal:_a_equal, value:a_value },
+            Field::NameKey { key:b_key, equal:_b_equal, value:b_value }
         ) =>
         {
-            // should fail a test
-            false
+            eq_token_reference(a_key, b_key) && eq_expression(a_value, b_value)
         },
 
         (
@@ -285,6 +289,7 @@ fn eq_punctuated_fields(a: &Punctuated<Field>, b: &Punctuated<Field>) -> bool
 {
     if a.len() != b.len()
     {
+        println!("eq_punctuated_fields returning false on length");
         return false;
     }
 
@@ -292,6 +297,7 @@ fn eq_punctuated_fields(a: &Punctuated<Field>, b: &Punctuated<Field>) -> bool
     {
         if !eq_field(a_pair.value(), b_pair.value())
         {
+            println!("eq_punctuated_fields returning false on individual {} {}", a_pair.value(), b_pair.value());
             return false;
         }
     }
@@ -299,10 +305,9 @@ fn eq_punctuated_fields(a: &Punctuated<Field>, b: &Punctuated<Field>) -> bool
     return true;
 }
 
-fn eq_table_constructor(_a: &TableConstructor, _b: &TableConstructor) -> bool
+fn eq_table_constructor(a: &TableConstructor, b: &TableConstructor) -> bool
 {
-    // should fail a test
-    return false;
+    eq_punctuated_fields(a.fields(), b.fields())
 }
 
 fn eq_suffixes<'a>(
@@ -418,6 +423,18 @@ fn eq_expression(a: &Expression, b: &Expression) -> bool
             eq_table_constructor(
                 &a_table_constructor,
                 &b_table_constructor),
+
+        (
+            Expression::Number(a_token_reference),
+            Expression::Number(b_token_reference)
+        ) =>
+            eq_token_reference(&a_token_reference, &b_token_reference),
+
+        (
+            Expression::String(a_token_reference),
+            Expression::String(b_token_reference)
+        ) =>
+            eq_token_reference(&a_token_reference, &b_token_reference),
 
         (
             Expression::Var(a_var),
@@ -719,9 +736,99 @@ fn eq_code(a: &str, b: &str) -> bool
 }
 
 #[test]
-fn basic()
+fn call_equal()
 {
     assert!(eq_code("foo()", "foo()"))
+}
+
+#[test]
+fn call_names_not_equal()
+{
+    assert!(!eq_code("bar()", "foo()"))
+}
+
+#[test]
+fn call_args_equal()
+{
+    assert!(eq_code("foo(x, y)", "foo(x, y)"))
+}
+
+#[test]
+fn call_args_not_equal()
+{
+    assert!(!eq_code("foo(x, 3)", "foo(x, y)"))
+}
+
+#[test]
+fn call_args_equal_strings()
+{
+    assert!(eq_code("foo\"apple\"", "foo\"apple\""))
+}
+
+#[test]
+fn call_args_not_equal_strings()
+{
+    assert!(!eq_code("foo\"apple\"", "foo\"banana\""))
+}
+
+#[test]
+fn call_args_equal_tables()
+{
+    assert!(eq_code("foo{x=1, y=2}", "foo{x=1, y=2}"))
+}
+
+#[test]
+fn call_args_not_equal_numbers_in_tables()
+{
+    assert!(!eq_code("foo{x=1, y=3}", "foo{x=1, y=2}"))
+}
+
+#[test]
+fn call_args_equal_strings_in_tables()
+{
+    assert!(eq_code("foo{x=1, y=\"apples\"}", "foo{x=1, y=\"apples\"}"))
+}
+
+#[test]
+fn call_args_not_equal_strings_in_tables()
+{
+    assert!(!eq_code("foo{x=1, y=\"apples\"}", "foo{x=1, y=\"bananas\"}"))
+}
+
+#[test]
+fn call_args_equal_lists()
+{
+    assert!(eq_code("foo{x, y}", "foo{x, y}"))
+}
+
+#[test]
+fn call_args_not_equal_lists()
+{
+    assert!(!eq_code("foo{x, y}", "foo{x}"))
+}
+
+#[test]
+fn call_args_not_equal_tables_switch()
+{
+    assert!(!eq_code("foo{y=2, x=1}", "foo{x=1, y=2}"))
+}
+
+#[test]
+fn method_call_equal()
+{
+    assert!(eq_code("obj:foo()", "obj:foo()"))
+}
+
+#[test]
+fn method_call_names_not_equal()
+{
+    assert!(!eq_code("obj:foo()", "subj:foo()"))
+}
+
+#[test]
+fn method_call_function_not_equal()
+{
+    assert!(!eq_code("obj:foo()", "subj:foo()"))
 }
 
 }
