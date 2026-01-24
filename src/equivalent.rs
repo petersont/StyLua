@@ -93,17 +93,13 @@ fn eq_prefix(a: &Prefix, b: &Prefix) -> bool
             Prefix::Expression(a_expression_box),
             Prefix::Expression(b_expression_box)
         ) =>
-        {
-            eq_expression(&*a_expression_box, &*b_expression_box)
-        },
+            eq_expression(&*a_expression_box, &*b_expression_box),
 
         (
             Prefix::Name(a_token_reference),
             Prefix::Name(b_token_reference)
         ) =>
-        {
-            a_token_reference == b_token_reference
-        },
+            eq_token_reference(a_token_reference, b_token_reference),
 
         (&_, &_) => todo!(),
     }
@@ -706,6 +702,12 @@ fn eq_code(a: &str, b: &str) -> bool
     eq_ast(
         &parse_fallible(a, config.syntax.into()).into_result().unwrap(),
         &parse_fallible(b, config.syntax.into()).into_result().unwrap())
+}
+
+#[test]
+fn call_equal_with_whitespace()
+{
+    assert!(eq_code("foo()", " foo () "))
 }
 
 #[test]
