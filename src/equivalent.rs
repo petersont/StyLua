@@ -382,7 +382,7 @@ pub fn eq_expression(a: &Expression, b: &Expression) -> bool
 
         _ =>
         {
-            // so far only luau stuff is not handled
+            // so far luau is not handled
             false
         },
     }
@@ -510,8 +510,6 @@ fn eq_else_if(a: &ElseIf, b: &ElseIf) -> bool
 
 fn eq_else_if_vec(a: &Vec<ElseIf>, b: &Vec<ElseIf>) -> bool
 {
-    println!("Making it here");
-
     if a.len() != b.len()
     {
         return false
@@ -671,7 +669,7 @@ fn eq_statement(a: &Stmt, b: &Stmt) -> bool
 fn eq_block(a: &Block, b: &Block) -> bool
 {
     let a_stmts_with_semicolon_vec: Vec<&(Stmt, Option<TokenReference>)> = a.stmts_with_semicolon().collect();
-    let b_stmts_with_semicolon_vec: Vec<&(Stmt, Option<TokenReference>)> = a.stmts_with_semicolon().collect();
+    let b_stmts_with_semicolon_vec: Vec<&(Stmt, Option<TokenReference>)> = b.stmts_with_semicolon().collect();
 
     if a_stmts_with_semicolon_vec.len() != b_stmts_with_semicolon_vec.len()
     {
@@ -708,6 +706,41 @@ fn eq_code(a: &str, b: &str) -> bool
     eq_ast(
         &parse_fallible(a, config.syntax.into()).into_result().unwrap(),
         &parse_fallible(b, config.syntax.into()).into_result().unwrap())
+}
+
+#[test]
+fn block_equal()
+{
+    assert!(eq_code("\
+foo()
+bar()", "\
+foo()
+bar()"))
+}
+
+#[test]
+fn block_not_equal_lines()
+{
+    assert!(!eq_code("\
+foo()
+bar()", "\
+foo()
+baz()"))
+}
+
+#[test]
+fn block_not_equal_quantity()
+{
+    assert!(!eq_code("\
+foo()
+bar()", "\
+foo()"))
+}
+
+#[test]
+fn call_with_different_number_of_argumnts()
+{
+    assert!(!eq_code("foo(x,y)", "foo(x,y,z)"))
 }
 
 #[test]
