@@ -27,6 +27,7 @@ use full_moon::ast::TableConstructor;
 use full_moon::ast::Var;
 use full_moon::ast::VarExpression;
 use full_moon::ast::MethodCall;
+use full_moon::ast::ElseIf;
 use full_moon::ast::punctuated::Punctuated;
 use full_moon::ast::punctuated::Pair;
 use full_moon::ast::span::ContainedSpan;
@@ -381,7 +382,7 @@ pub fn eq_expression(a: &Expression, b: &Expression) -> bool
 
         _ =>
         {
-            // can't wait to see what test this fails
+            // so far only luau stuff is not handled
             false
         },
     }
@@ -501,10 +502,50 @@ fn eq_assignment(a: &Assignment, b: &Assignment) -> bool
     true
 }
 
-fn eq_if_statement(_a: &If, _b: &If) -> bool
+fn eq_else_if(a: &ElseIf, b: &ElseIf) -> bool
 {
-    // oof this will definitely fail a very simple test
-    false
+    eq_expression(a.condition(), b.condition())
+        && eq_block(a.block(), b.block())
+}
+
+fn eq_else_if_vec(a: &Vec<ElseIf>, b: &Vec<ElseIf>) -> bool
+{
+    println!("Making it here");
+
+    if a.len() != b.len()
+    {
+        return false
+    }
+
+    for (else_if_a, else_if_b) in a.iter().zip(b.iter())
+    {
+        if ! eq_else_if(else_if_a, else_if_b)
+        {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn eq_if_statement(a: &If, b: &If) -> bool
+{
+    eq_expression(a.condition(), b.condition())
+        && eq_block(a.block(), b.block())
+        && match (a.else_if(), b.else_if())
+        {
+            (None, None) => true,
+            (Some(a_else_ifs), Some(b_else_ifs)) =>
+                eq_else_if_vec(a_else_ifs, b_else_ifs),
+            _ => false,
+        }
+        && match (a.else_block(), b.else_block())
+        {
+            (None, None) => true,
+            (Some(a_else_block), Some(b_else_block)) =>
+                eq_block(a_else_block, b_else_block),
+            _ => false,
+        }
 }
 
 fn eq_while_loop(a: &While, b: &While) -> bool
@@ -660,7 +701,6 @@ mod tests
 use full_moon::parse_fallible;
 use crate::equivalent::eq_ast;
 use crate::Config;
-// use crate::OutputVerification;
 
 fn eq_code(a: &str, b: &str) -> bool
 {
@@ -788,6 +828,139 @@ fn method_call_with_string_and_bool_not_equal()
 fn method_call_with_string_not_equal_and_bool()
 {
     assert!(!eq_code("obj:foo(\"name\", false)", "obj:foo(\"other\", false)"))
+}
+
+#[test]
+fn if_statement_equal()
+{
+    assert!(eq_code("if true then print(\"true\") end", "if true then print(\"true\") end"))
+}
+
+#[test]
+fn if_statement_not_equal_condition()
+{
+    assert!(!eq_code("if false then print(\"true\") end", "if true then print(\"true\") end"))
+}
+
+#[test]
+fn if_statement_not_equal_body()
+{
+    assert!(!eq_code("if false then print(\"true\") end", "if true then print(\"true\") end"))
+}
+
+#[test]
+fn if_statement_with_elseif_equal()
+{
+    assert!(eq_code("\
+if false then
+    print(\"false\")
+elseif is_true() then
+    print(\"is_true\")
+end",
+    "\
+if false then
+    print(\"false\")
+elseif is_true() then
+    print(\"is_true\")
+end"))
+}
+
+#[test]
+fn if_statement_with_elseif_condition_not_equal()
+{
+    assert!(!eq_code("\
+if false then
+    print(\"false\")
+elseif is_false() then
+    print(\"is_true\")
+end",
+    "\
+if false then
+    print(\"false\")
+elseif is_true() then
+    print(\"is_true\")
+end"))
+}
+
+#[test]
+fn if_statement_with_elseif_body_not_equal()
+{
+    assert!(!eq_code("\
+if false then
+    print(\"false\")
+elseif is_true() then
+    print(\"is_true\")
+end",
+    "\
+if false then
+    print(\"false\")
+elseif is_true() then
+    print(\"is_false\")
+end"))
+}
+
+#[test]
+fn if_statement_with_elseif_vs_without()
+{
+    assert!(!eq_code("\
+if false then
+    print(\"false\")
+elseif is_false() then
+    print(\"is_true\")
+end",
+    "\
+if false then
+    print(\"false\")
+end"))
+}
+
+#[test]
+fn if_statement_with_else_equal()
+{
+    assert!(eq_code("\
+if false then
+    print(\"false\")
+else
+    print(\"is_true\")
+end",
+    "\
+if false then
+    print(\"false\")
+else
+    print(\"is_true\")
+end"))
+}
+
+#[test]
+fn if_statement_with_else_vs_without()
+{
+    assert!(!eq_code("\
+if false then
+    print(\"false\")
+else
+    print(\"is_true\")
+end",
+    "\
+if false then
+    print(\"false\")
+end"))
+}
+
+#[test]
+fn if_statement_with_else_not_equal_body()
+{
+    assert!(!eq_code("\
+if false then
+    print(\"false\")
+else
+    print(\"is_true\")
+end",
+    "\
+if false then
+    print(\"false\")
+else
+    print(\"is_false\")
+end"))
 }
 
 }
