@@ -41,6 +41,8 @@ use full_moon::tokenizer::Symbol::True;
 use full_moon::tokenizer::Symbol::False;
 use full_moon::tokenizer::TokenType::Symbol;
 
+use crate::equivalent::eq_expression;
+
 fn simplify_function_args(function_args: &FunctionArgs) -> FunctionArgs
 {
     match function_args
@@ -300,8 +302,8 @@ fn simplify_binary_operator(left_expression : &Expression, binop: &BinOp, right_
 
         TwoEqual(_) =>
         {
-            if (is_just_true(left_expression) && is_just_true(right_expression)) ||
-                (is_just_false(left_expression) && is_just_false(right_expression))
+            if (is_just(left_expression, true) && is_just(right_expression, true)) ||
+                (is_just(left_expression, false) && is_just(right_expression, false))
             {
                 return Expression::Symbol(TokenReference::new(
                     vec![],
@@ -310,8 +312,8 @@ fn simplify_binary_operator(left_expression : &Expression, binop: &BinOp, right_
                 ));
             }
 
-            if (is_just_true(left_expression) && is_just_false(right_expression)) ||
-                (is_just_false(left_expression) && is_just_true(right_expression))
+            if (is_just(left_expression, true) && is_just(right_expression, false)) ||
+                (is_just(left_expression, false) && is_just(right_expression, true))
             {
                 return Expression::Symbol(TokenReference::new(
                     vec![],
@@ -323,8 +325,8 @@ fn simplify_binary_operator(left_expression : &Expression, binop: &BinOp, right_
 
         TildeEqual(_) =>
         {
-            if (is_just_true(left_expression) && is_just_true(right_expression)) ||
-                (is_just_false(left_expression) && is_just_false(right_expression))
+            if (is_just(left_expression, true) && is_just(right_expression, true)) ||
+                (is_just(left_expression, false) && is_just(right_expression, false))
             {
                 return Expression::Symbol(TokenReference::new(
                     vec![],
@@ -333,8 +335,8 @@ fn simplify_binary_operator(left_expression : &Expression, binop: &BinOp, right_
                 ));
             }
 
-            if (is_just_true(left_expression) && is_just_false(right_expression)) ||
-                (is_just_false(left_expression) && is_just_true(right_expression))
+            if (is_just(left_expression, true) && is_just(right_expression, false)) ||
+                (is_just(left_expression, false) && is_just(right_expression, true))
             {
                 return Expression::Symbol(TokenReference::new(
                     vec![],
@@ -478,50 +480,19 @@ fn simplify_assignment(assignment: &Assignment) -> Assignment
         simplify_punctuated_expressions(assignment.expressions()))
 }
 
-fn is_just_true(expression: &Expression) -> bool
+fn new_bool_token_reference(value: bool) -> TokenReference
 {
-    match expression
-    {
-        Expression::Symbol(ref token_reference) =>
-        {
-            match token_reference.token().token_type()
-            {
-                Symbol{ symbol } =>
-                {
-                    match symbol
-                    {
-                        True => return true,
-                        _ => false,
-                    }
-                },
-                _ => false,
-            }
-        },
-        _ => false,
-    }
+    TokenReference::new(
+        vec![],
+        Token::new(Symbol{symbol:
+            if value {True} else {False}}),
+        vec![]
+    )
 }
 
-fn is_just_false(expression: &Expression) -> bool
+fn is_just(expression: &Expression, val:bool) -> bool
 {
-    match expression
-    {
-        Expression::Symbol(ref token_reference) =>
-        {
-            match token_reference.token().token_type()
-            {
-                Symbol{ symbol } =>
-                {
-                    match symbol
-                    {
-                        False => return true,
-                        _ => false,
-                    }
-                },
-                _ => false,
-            }
-        },
-        _ => false,
-    }
+    eq_expression(expression, &Expression::Symbol(new_bool_token_reference(val)))
 }
 
 enum Predicate
@@ -587,7 +558,7 @@ fn clauses_to_statements(mut clauses: Vec<Clause>) -> Vec<Stmt>
 
 fn to_predicate(expression: Expression) -> Predicate
 {
-    if is_just_true(&expression)
+    if is_just(&expression, true)
     {
         return Predicate::True;
     }
@@ -600,7 +571,7 @@ fn simplify_if_statement(if_statement: &If) -> Vec<Stmt>
     let new_condition = simplify_expression(if_statement.condition());
     let new_block = simplify_block(if_statement.block());
 
-    if ! is_just_false(&new_condition)
+    if ! is_just(&new_condition, false)
     {
         clauses.push(Clause{
             predicate: to_predicate(new_condition),
@@ -613,7 +584,7 @@ fn simplify_if_statement(if_statement: &If) -> Vec<Stmt>
         for else_if_clause in elseifs
         {
             let new_condition = simplify_expression(else_if_clause.condition());
-            if is_just_false(&new_condition)
+            if is_just(&new_condition, false)
             {
                 continue;
             }

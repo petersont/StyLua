@@ -1,9 +1,5 @@
+#[cfg(test)]
 use full_moon::ast::Ast;
-// use full_moon::ast::BinOp::Or;
-// use full_moon::ast::BinOp::And;
-// use full_moon::ast::BinOp::TwoEqual;
-// use full_moon::ast::BinOp::TildeEqual;
-// use full_moon::ast::UnOp::Not;
 use full_moon::ast::FunctionCall;
 use full_moon::ast::Expression;
 use full_moon::ast::Prefix;
@@ -13,7 +9,6 @@ use full_moon::ast::FunctionArgs;
 use full_moon::ast::LocalAssignment;
 use full_moon::ast::Assignment;
 use full_moon::ast::If;
-// use full_moon::ast::ElseIf;
 use full_moon::ast::Do;
 use full_moon::ast::While;
 use full_moon::ast::FunctionDeclaration;
@@ -32,16 +27,10 @@ use full_moon::ast::TableConstructor;
 use full_moon::ast::Var;
 use full_moon::ast::VarExpression;
 use full_moon::ast::MethodCall;
-
 use full_moon::ast::punctuated::Punctuated;
 use full_moon::ast::punctuated::Pair;
 use full_moon::ast::span::ContainedSpan;
-
 use full_moon::tokenizer::TokenReference;
-// use full_moon::tokenizer::Token;
-// use full_moon::tokenizer::Symbol::True;
-// use full_moon::tokenizer::Symbol::False;
-// use full_moon::tokenizer::TokenType::Symbol;
 
 fn eq_function_args(a: &FunctionArgs, b: &FunctionArgs) -> bool
 {
@@ -80,23 +69,18 @@ fn eq_call(a: &Call, b: &Call) -> bool
     match (a, b)
     {
         (
-            Call::AnonymousCall(_a_function_args),
-            Call::AnonymousCall(_b_function_args)
-        )
-        =>
-        {
-            true
-        },
+            Call::AnonymousCall(a_function_args),
+            Call::AnonymousCall(b_function_args)
+        ) => 
+            eq_function_args(a_function_args, b_function_args),
 
         (
-            Call::MethodCall(_a_method_call),
-            Call::MethodCall(_b_method_call)
+            Call::MethodCall(a_method_call),
+            Call::MethodCall(b_method_call)
         ) =>
-        {
-            false
-        },
+            eq_method_call(a_method_call, b_method_call),
 
-        (&_, &_) => false,
+        (&_, &_) => todo!(),
     }
 }
 
@@ -132,46 +116,20 @@ fn eq_method_call(a: &MethodCall, b: &MethodCall) -> bool
 
 fn eq_suffix(a: &Suffix, b: &Suffix) -> bool
 {
-    println!("eq_suffix: {} {}", a.to_string(), b.to_string());
     match (a, b)
     {
         (
             Suffix::Call(a_call),
             Suffix::Call(b_call)
         ) =>
-        {
-            println!("Suffix::Call");
-            match (a_call, b_call)
-            {
-                (
-                    Call::AnonymousCall(a_function_args),
-                    Call::AnonymousCall(b_function_args)
-                ) => 
-                {
-                    println!("Suffix::Call / AnonymousCall");
-                    eq_function_args(a_function_args, b_function_args)
-                },
-
-                (
-                    Call::MethodCall(a_method_call),
-                    Call::MethodCall(b_method_call)
-                ) =>
-                {
-                    println!("Suffix::Call / MethodCall");
-                    eq_method_call(a_method_call, b_method_call)
-                },
-
-                 (&_, &_) => todo!(),
-            }
-        },
+            eq_call(a_call, b_call),
 
         (
             Suffix::Index(_a_index),
             Suffix::Index(_b_index),
         ) =>
         {
-            println!("Suffix::Index");
-            false
+            todo!();
         },
 
         #[cfg(feature = "luau")]
@@ -180,45 +138,19 @@ fn eq_suffix(a: &Suffix, b: &Suffix) -> bool
             Suffix::TypeInstantiation(b_type_instantiation)
         ) =>
         {
-            true
+            todo!();
         },
 
         (&_, &_) => 
         {
-            println!("Somethign else???");
-            false
+            panic!("unexpected something else as suffix");
         }
     }
 }
 
 fn eq_function_call(a: &FunctionCall, b: &FunctionCall) -> bool
 {
-    println!("eq_function_call");
-    if !eq_prefix(a.prefix(), b.prefix())
-    {
-        println!("prefixes are not equal");
-        return false;
-    }
-
-    let a_suffix_vec : Vec<&Suffix> = a.suffixes().collect();
-    let b_suffix_vec : Vec<&Suffix> = b.suffixes().collect();
-
-    if a_suffix_vec.len() != b_suffix_vec.len()
-    {
-        println!("suffixe are differnet lengths");
-        return false;
-    }
-
-    for (a_suffix, b_suffix) in a.suffixes().zip(b.suffixes())
-    {
-        if !eq_suffix(&a_suffix, &b_suffix)
-        {
-            println!("a suffix is not equal");
-            return false;
-        }
-    }
-
-    return true;
+    eq_prefix(a.prefix(), b.prefix()) && eq_suffixes(a.suffixes(), b.suffixes())
 }
 
 fn eq_parentheses(
@@ -289,7 +221,6 @@ fn eq_punctuated_fields(a: &Punctuated<Field>, b: &Punctuated<Field>) -> bool
 {
     if a.len() != b.len()
     {
-        println!("eq_punctuated_fields returning false on length");
         return false;
     }
 
@@ -297,7 +228,6 @@ fn eq_punctuated_fields(a: &Punctuated<Field>, b: &Punctuated<Field>) -> bool
     {
         if !eq_field(a_pair.value(), b_pair.value())
         {
-            println!("eq_punctuated_fields returning false on individual {} {}", a_pair.value(), b_pair.value());
             return false;
         }
     }
@@ -368,7 +298,7 @@ fn eq_var(a: &Var, b: &Var) -> bool
     }
 }
 
-fn eq_expression(a: &Expression, b: &Expression) -> bool
+pub fn eq_expression(a: &Expression, b: &Expression) -> bool
 {
     match (a, b)
     {
@@ -434,6 +364,14 @@ fn eq_expression(a: &Expression, b: &Expression) -> bool
             Expression::String(a_token_reference),
             Expression::String(b_token_reference)
         ) =>
+        {
+            eq_token_reference(&a_token_reference, &b_token_reference)
+        },
+
+        (
+            Expression::Symbol(a_token_reference),
+            Expression::Symbol(b_token_reference)
+        ) =>
             eq_token_reference(&a_token_reference, &b_token_reference),
 
         (
@@ -452,10 +390,7 @@ fn eq_expression(a: &Expression, b: &Expression) -> bool
 
 fn eq_punctuated_expressions(a :&Punctuated<Expression>, b :&Punctuated<Expression>) -> bool
 {
-    let a_pair_vec : Vec<&Pair<Expression>> = a.pairs().collect();
-    let b_pair_vec : Vec<&Pair<Expression>> = a.pairs().collect();
-
-    if a_pair_vec.len() != b_pair_vec.len()
+    if a.len() != b.len()
     {
         return false;
     }
@@ -474,7 +409,7 @@ fn eq_token_reference(
     a: &TokenReference,
     b: &TokenReference) -> bool
 {
-    a.token() == b.token()
+    a.token().to_string() == b.token().to_string()
 }
 
 fn eq_punctuated_token_reference(
@@ -714,6 +649,7 @@ fn eq_block(a: &Block, b: &Block) -> bool
     true
 }
 
+#[cfg(test)]
 pub fn eq_ast(a: &Ast, b: &Ast) -> bool
 {
     eq_block(a.nodes(), b.nodes())
@@ -829,6 +765,24 @@ fn method_call_names_not_equal()
 fn method_call_function_not_equal()
 {
     assert!(!eq_code("obj:foo()", "subj:foo()"))
+}
+
+#[test]
+fn method_call_with_string_and_bool_equal()
+{
+    assert!(eq_code("obj:foo(\"name\", false)", "obj:foo(  \"name\",  false )  "))
+}
+
+#[test]
+fn method_call_with_string_and_bool_not_equal()
+{
+    assert!(!eq_code("obj:foo(\"name\", false)", "obj:foo(\"name\", true)"))
+}
+
+#[test]
+fn method_call_with_string_not_equal_and_bool()
+{
+    assert!(!eq_code("obj:foo(\"name\", false)", "obj:foo(\"other\", false)"))
 }
 
 }
