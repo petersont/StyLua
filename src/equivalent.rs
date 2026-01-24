@@ -286,12 +286,11 @@ fn eq_var(a: &Var, b: &Var) -> bool
         }
 
         (
-            Var::Name(_),
-            Var::Name(_)
+            Var::Name(a_token_reference),
+            Var::Name(b_token_reference)
         ) =>
         {
-            // I am guessing this should fail a test
-            true
+            eq_token_reference(a_token_reference, b_token_reference)
         },
 
         (&_, &_) => false,
@@ -735,6 +734,12 @@ fn call_args_not_equal_strings_in_tables()
 fn call_args_equal_lists()
 {
     assert!(eq_code("foo{x, y}", "foo{x, y}"))
+}
+
+#[test]
+fn call_args_not_equal_single_var_arg()
+{
+    assert!(!eq_code("foo(x)", "foo(y)"))
 }
 
 #[test]
