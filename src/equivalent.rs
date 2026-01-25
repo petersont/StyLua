@@ -118,7 +118,7 @@ fn eq_index(a: &Index, b: &Index) -> bool
     {
         (Index::Brackets{brackets:_a_brackets, expression:a_expression}, Index::Brackets{brackets:_b_brackets, expression:b_expression}) =>
             eq_expression(a_expression, b_expression),
-        
+
         (Index::Dot{dot:_a_dot, name:a_name}, Index::Dot{dot:_b_dot, name:b_name}) =>
             eq_token_reference(a_name, b_name),
 
@@ -147,13 +147,11 @@ fn eq_suffix(a: &Suffix, b: &Suffix) -> bool
             Suffix::TypeInstantiation(a_type_instantiation),
             Suffix::TypeInstantiation(b_type_instantiation)
         ) =>
-        {
-            todo!();
-        },
+            todo!(),
 
         (&_, &_) => 
         {
-            panic!("unexpected something else as suffix");
+            panic!("oops, thought that was impossible");
         }
     }
 }
@@ -202,26 +200,20 @@ fn eq_field(a: &Field, b: &Field) -> bool
             Field::ExpressionKey { brackets:_a_brackets, key:a_key, equal:_a_equal, value:a_value },
             Field::ExpressionKey { brackets:_b_brackets, key:b_key, equal:_b_equal, value:b_value }
         ) =>
-        {
-            eq_expression(a_key, b_key) && eq_expression(a_value, b_value)
-        },
+            eq_expression(a_key, b_key) && eq_expression(a_value, b_value),
 
         (
             Field::NameKey { key:a_key, equal:_a_equal, value:a_value },
             Field::NameKey { key:b_key, equal:_b_equal, value:b_value }
         ) =>
-        {
-            eq_token_reference(a_key, b_key) && eq_expression(a_value, b_value)
-        },
+            eq_token_reference(a_key, b_key) && eq_expression(a_value, b_value),
 
         (
             Field::NoKey(a_expression),
             Field::NoKey(b_expression)
         )
         =>
-        {
-            eq_expression(a_expression, b_expression)
-        },
+            eq_expression(a_expression, b_expression),
 
         _ => false,
     }
@@ -291,17 +283,13 @@ fn eq_var(a: &Var, b: &Var) -> bool
             Var::Expression(a_var_expression_box),
             Var::Expression(b_var_expression_box)
         ) =>
-        {
-            eq_var_expression(&*a_var_expression_box, &*b_var_expression_box)
-        }
+            eq_var_expression(&*a_var_expression_box, &*b_var_expression_box),
 
         (
             Var::Name(a_token_reference),
             Var::Name(b_token_reference)
         ) =>
-        {
-            eq_token_reference(a_token_reference, b_token_reference)
-        },
+            eq_token_reference(a_token_reference, b_token_reference),
 
         (&_, &_) => false,
     }
@@ -315,37 +303,29 @@ pub fn eq_expression(a: &Expression, b: &Expression) -> bool
             Expression::FunctionCall(a_function_call),
             Expression::FunctionCall(b_function_call)
         ) =>
-        {
-            eq_function_call(a_function_call, b_function_call)
-        },
+            eq_function_call(a_function_call, b_function_call),
 
         (
             Expression::Parentheses{contained:a_contained, expression:a_expression},
             Expression::Parentheses{contained:b_contained, expression:b_expression}
         ) =>
-        {
             eq_parentheses(
                 &a_contained, &*a_expression,
-                &b_contained, &*b_expression)
-        },
+                &b_contained, &*b_expression),
 
         (
             Expression::UnaryOperator{unop:a_unop, expression:a_expression},
             Expression::UnaryOperator{unop:b_unop, expression:b_expression}
         ) =>
-        {
-            eq_unary_operator(&a_unop, &a_expression, &b_unop, &b_expression)
-        },
+            eq_unary_operator(&a_unop, &a_expression, &b_unop, &b_expression),
 
         (
             Expression::BinaryOperator{lhs:a_lhs, binop:a_binop, rhs:a_rhs},
             Expression::BinaryOperator{lhs:b_lhs, binop:b_binop, rhs:b_rhs}
         ) =>
-        {
             eq_binary_operator(
                 &a_lhs, &a_binop, &a_rhs,
-                &b_lhs, &b_binop, &b_rhs)
-        },
+                &b_lhs, &b_binop, &b_rhs),
 
         (
             Expression::Function(a_anonymous_function_box),
@@ -373,9 +353,7 @@ pub fn eq_expression(a: &Expression, b: &Expression) -> bool
             Expression::String(a_token_reference),
             Expression::String(b_token_reference)
         ) =>
-        {
-            eq_token_reference(&a_token_reference, &b_token_reference)
-        },
+            eq_token_reference(&a_token_reference, &b_token_reference),
 
         (
             Expression::Symbol(a_token_reference),
@@ -747,6 +725,36 @@ foo()"))
 }
 
 #[test]
+fn local_assignment_equal()
+{
+    assert!(eq_code("local x = 1", "local x = 1"))
+}
+
+#[test]
+fn local_assignment_not_equal()
+{
+    assert!(!eq_code("local x = 1", "local x = 2"))
+}
+
+#[test]
+fn local_assignment_not_equal_suffix()
+{
+    assert!(!eq_code("local x = lib.foo()", "local x = lib:foo()"))
+}
+
+#[test]
+fn assignment_equal()
+{
+    assert!(eq_code("x = 1", "x = 1"))
+}
+
+#[test]
+fn assignment_not_equal()
+{
+    assert!(!eq_code("x = 1", "x = 2"))
+}
+
+#[test]
 fn call_equal()
 {
     assert!(eq_code("foo()", "foo()"))
@@ -816,6 +824,30 @@ fn index_not_equal_using_brackets()
 fn call_with_different_index_in_argument()
 {
     assert!(!eq_code("foo(x.y)", "foo(x.z)"))
+}
+
+#[test]
+fn index_different_types()
+{
+    assert!(!eq_code("foo(x.y)", "foo(x[\"z\"])"))
+}
+
+#[test]
+fn method_call_vs_index()
+{
+    assert!(!eq_code("foo(x.y)", "foo(x:foo())"))
+}
+
+#[test]
+fn function_call_suffix_call_vs_index()
+{
+    assert!(!eq_code("foo(x.foo())", "foo(x:foo())"))
+}
+
+#[test]
+fn function_call_stmt_call_vs_index()
+{
+    assert!(!eq_code("x.foo()", "x:foo()"))
 }
 
 #[test]
