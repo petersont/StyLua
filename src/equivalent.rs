@@ -28,6 +28,7 @@ use full_moon::ast::Var;
 use full_moon::ast::VarExpression;
 use full_moon::ast::MethodCall;
 use full_moon::ast::ElseIf;
+use full_moon::ast::Index;
 use full_moon::ast::punctuated::Punctuated;
 use full_moon::ast::punctuated::Pair;
 use full_moon::ast::span::ContainedSpan;
@@ -111,6 +112,20 @@ fn eq_method_call(a: &MethodCall, b: &MethodCall) -> bool
         && eq_function_args(a.args(), b.args())
 }
 
+fn eq_index(a: &Index, b: &Index) -> bool
+{
+    match (a, b)
+    {
+        (Index::Brackets{brackets:_a_brackets, expression:a_expression}, Index::Brackets{brackets:_b_brackets, expression:b_expression}) =>
+            eq_expression(a_expression, b_expression),
+        
+        (Index::Dot{dot:_a_dot, name:a_name}, Index::Dot{dot:_b_dot, name:b_name}) =>
+            eq_token_reference(a_name, b_name),
+
+        _ => false,
+    }
+}
+
 fn eq_suffix(a: &Suffix, b: &Suffix) -> bool
 {
     match (a, b)
@@ -122,12 +137,10 @@ fn eq_suffix(a: &Suffix, b: &Suffix) -> bool
             eq_call(a_call, b_call),
 
         (
-            Suffix::Index(_a_index),
-            Suffix::Index(_b_index),
+            Suffix::Index(a_index),
+            Suffix::Index(b_index)
         ) =>
-        {
-            todo!();
-        },
+            eq_index(a_index, b_index),
 
         #[cfg(feature = "luau")]
         (
@@ -705,12 +718,6 @@ fn eq_code(a: &str, b: &str) -> bool
 }
 
 #[test]
-fn call_equal_with_whitespace()
-{
-    assert!(eq_code("foo()", " foo () "))
-}
-
-#[test]
 fn block_equal()
 {
     assert!(eq_code("\
@@ -740,15 +747,15 @@ foo()"))
 }
 
 #[test]
-fn call_with_different_number_of_argumnts()
-{
-    assert!(!eq_code("foo(x,y)", "foo(x,y,z)"))
-}
-
-#[test]
 fn call_equal()
 {
     assert!(eq_code("foo()", "foo()"))
+}
+
+#[test]
+fn call_equal_with_whitespace()
+{
+    assert!(eq_code("foo()", " foo () "))
 }
 
 #[test]
@@ -761,6 +768,60 @@ fn call_names_not_equal()
 fn call_args_equal()
 {
     assert!(eq_code("foo(x, y)", "foo(x, y)"))
+}
+
+#[test]
+fn call_with_different_number_of_arguments()
+{
+    assert!(!eq_code("foo(x,y)", "foo(x,y,z)"))
+}
+
+#[test]
+fn call_with_different_prefix_before_dot()
+{
+    assert!(!eq_code("foo(x.y)", "foo(z.y)"))
+}
+
+#[test]
+fn call_with_different_prefix_before_brackets()
+{
+    assert!(!eq_code("foo(x[\"y\"])", "foo(z[\"y\"])"))
+}
+
+#[test]
+fn index_equal_with_dot()
+{
+    assert!(eq_code("foo(x.y)", "foo(x.y)"))
+}
+
+#[test]
+fn index_equal_using_brackets()
+{
+    assert!(eq_code("foo(x[\"y\"])", "foo(x[\"y\"])"))
+}
+
+#[test]
+fn index_not_equal_with_dot()
+{
+    assert!(!eq_code("foo(x.y)", "foo(x.z)"))
+}
+
+#[test]
+fn index_not_equal_using_brackets()
+{
+    assert!(!eq_code("foo(x[\"y\"])", "foo(x[\"z\"])"))
+}
+
+#[test]
+fn call_with_different_index_in_argument()
+{
+    assert!(!eq_code("foo(x.y)", "foo(x.z)"))
+}
+
+#[test]
+fn call_with_different_index_in_function_name()
+{
+    assert!(!eq_code("lib.foo(3)", "math.foo(3)"))
 }
 
 #[test]
