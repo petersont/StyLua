@@ -435,15 +435,103 @@ fn replace_code(replacer: Replacer, code: &str) -> String
         config, None, OutputVerification::None).unwrap().to_string()
 }
 
-#[test]
-fn assignment_replace_number()
+fn check_replace_1_with_2(code: &str)
 {
-    assert_eq!(replace_code(Replacer{expressions:vec![
-            (Expression::Number(TokenReference::new(vec![], Token::new(TokenType::Number { text: "1".into() }), vec![])),
+    assert_eq!(replace_code(Replacer{expressions:vec![(
+            Expression::Number(TokenReference::new(vec![], Token::new(TokenType::Number { text: "1".into() }), vec![])),
             Expression::Number(TokenReference::new(vec![], Token::new(TokenType::Number { text: "2".into() }), vec![])))
         ]},
-        "local x = 1\n"),
-        "local x = 2\n");
+        code),
+        code.replace("1", "2"));
 }
 
+#[test]
+fn number_in_local_assignemnt()
+{
+    check_replace_1_with_2("local x = 1\n");
+}
+
+#[test]
+fn number_in_function_args()
+{
+    check_replace_1_with_2("foo(1)\n");
+}
+
+#[test]
+fn number_in_function_arg_list()
+{
+    check_replace_1_with_2("foo(1, y)\n");
+}
+
+#[test]
+fn number_in_function_call_on_line_in_assignment()
+{
+    check_replace_1_with_2("z = foo(1, y)\n");
+}
+
+#[test]
+fn number_in_function_call_on_line_in_local_assignment()
+{
+    check_replace_1_with_2("local z = foo(1, y)\n");
+}
+
+#[test]
+fn number_in_method_call_arguments()
+{
+    check_replace_1_with_2("obj:foo(1, y)\n");
+}
+
+#[test]
+fn number_in_table_in_function()
+{
+    check_replace_1_with_2("foo({ [1] = y })\n");
+}
+
+#[test]
+fn number_in_table_in_if_condition()
+{
+    check_replace_1_with_2("if 1 == 2 then\n\tfoo()\nend\n");
+}
+
+#[test]
+fn number_in_table_in_if_body()
+{
+    check_replace_1_with_2("if true then\n\tfoo(1)\nend\n");
+}
+
+#[test]
+fn number_in_table_in_else()
+{
+    check_replace_1_with_2("if false then\n\tbar()\nelse\n\tfoo(1)\nend\n");
+}
+
+#[test]
+fn number_in_table_in_while_condition()
+{
+    check_replace_1_with_2("while 1 == 2 do\n\tprint(\"hey\")\nend\n");
+}
+
+#[test]
+fn number_in_table_in_while_body()
+{
+    check_replace_1_with_2("while true do\n\tprint(1)\nend\n");
+}
+
+#[test]
+fn number_in_table_in_repeat_until_body()
+{
+    check_replace_1_with_2("repeat\n\tprint(1)\nuntil true\n");
+}
+
+#[test]
+fn number_in_table_in_repeat_until_condition()
+{
+    check_replace_1_with_2("repeat\n\tprint(\"some line\")\nuntil 1 == 2\n");
+}
+
+#[test]
+fn number_in_table_in_function_definition()
+{
+    check_replace_1_with_2("function foo()\n\tprint(1)\nend\n");
+}
 }
