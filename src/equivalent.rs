@@ -1,5 +1,3 @@
-#[cfg(test)]
-use full_moon::ast::Ast;
 use full_moon::ast::FunctionCall;
 use full_moon::ast::Expression;
 use full_moon::ast::Prefix;
@@ -668,18 +666,14 @@ fn eq_block(a: &Block, b: &Block) -> bool
     true
 }
 
-#[cfg(test)]
-pub fn eq_ast(a: &Ast, b: &Ast) -> bool
-{
-    eq_block(a.nodes(), b.nodes())
-}
 
 #[cfg(test)]
 mod tests
 {
 use full_moon::parse_fallible;
-use crate::equivalent::eq_ast;
+use crate::equivalent::eq_block;
 use crate::Config;
+use full_moon::ast::Ast;
 
 fn eq_code(a: &str, b: &str) -> bool
 {
@@ -687,6 +681,11 @@ fn eq_code(a: &str, b: &str) -> bool
     eq_ast(
         &parse_fallible(a, config.syntax.into()).into_result().unwrap(),
         &parse_fallible(b, config.syntax.into()).into_result().unwrap())
+}
+
+fn eq_ast(a: &Ast, b: &Ast) -> bool
+{
+    eq_block(a.nodes(), b.nodes())
 }
 
 #[test]
