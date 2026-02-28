@@ -42,25 +42,19 @@ fn eq_function_args(a: &FunctionArgs, b: &FunctionArgs) -> bool
             FunctionArgs::Parentheses {parentheses:_a_parentheses, arguments:a_arguments},
             FunctionArgs::Parentheses {parentheses:_b_parentheses, arguments:b_arguments}
         ) => 
-        {
-            eq_punctuated_expressions(a_arguments, b_arguments)
-        },
+            eq_punctuated_expressions(a_arguments, b_arguments),
 
         (
             FunctionArgs::String(a_token_reference),
             FunctionArgs::String(b_token_reference)
         ) =>
-        {
-            eq_token_reference(a_token_reference, b_token_reference)
-        },
+            eq_token_reference(a_token_reference, b_token_reference),
 
         (
             FunctionArgs::TableConstructor(a_table_constructor),
             FunctionArgs::TableConstructor(b_table_constructor)
         ) =>
-        {
-            eq_table_constructor(a_table_constructor, b_table_constructor)
-        },
+            eq_table_constructor(a_table_constructor, b_table_constructor),
 
         (&_, &_) => false,
     }

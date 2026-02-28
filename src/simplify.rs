@@ -77,11 +77,10 @@ fn simplify_prefix(prefix: &Prefix) -> Prefix
 {
     match prefix
     {
-        Prefix::Expression(expression_box) =>
-            Prefix::Expression(Box::new(simplify_expression(&*expression_box))),
+        Prefix::Expression(expression_box) => Prefix::Expression(
+            Box::new(simplify_expression(&*expression_box))),
 
-        Prefix::Name(_token_reference) =>
-            prefix.clone(),
+        Prefix::Name(token_reference) => Prefix::Name(token_reference.clone()),
 
         &_ => todo!(),
     }
@@ -91,21 +90,11 @@ fn simplify_suffix(suffix: &Suffix) -> Suffix
 {
     match suffix
     {
-        Suffix::Call(call) =>
-        {
-            Suffix::Call(simplify_call(call))
-        },
-
-        Suffix::Index(index) =>
-        {
-            Suffix::Index(index.clone())
-        },
+        Suffix::Call(call) => Suffix::Call(simplify_call(call)),
+        Suffix::Index(index) => Suffix::Index(index.clone()),
 
         #[cfg(feature = "luau")]
-        Suffix::TypeInstantiation(type_instantiation) =>
-        {
-            Suffix::TypeInstantiation(type_instantiation.clone())
-        },
+        Suffix::TypeInstantiation(type_instantiation) => Suffix::TypeInstantiation(type_instantiation.clone()),
 
         &_ => todo!()
     }
@@ -423,8 +412,8 @@ fn simplify_var(var: &Var) -> Var
     {
         Var::Expression(var_expression_box) =>
             Var::Expression(Box::new(simplify_var_expression(&*var_expression_box))),
-        Var::Name(_) =>
-            var.clone(),
+
+        Var::Name(token_reference) => Var::Name(token_reference.clone()),
         &_ => todo!(),
     }
 }
@@ -747,7 +736,8 @@ use crate::Config;
 use crate::format_ast;
 use crate::OutputVerification;
 
-fn simplify_code(code: &str) -> String {
+fn simplify_code(code: &str) -> String
+{
     let config = Config::default();
     format_ast(simplify_ast(&parse_fallible(code, config.syntax.into()).into_result().unwrap()),
         config, None, OutputVerification::None).unwrap().to_string()

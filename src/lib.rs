@@ -15,6 +15,7 @@ mod formatters;
 mod shape;
 mod simplify;
 mod equivalent;
+mod replace;
 mod sort_requires;
 mod verify_ast;
 
